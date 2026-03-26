@@ -21,6 +21,12 @@ export interface DataViewResponse {
 	max_rows: number;
 }
 
+export interface WorkingDirectoryResponse {
+	status: string;
+	message?: string;
+	directory?: string;
+}
+
 export interface GraphDescriptor {
 	name: string;
 	path: string;
@@ -98,6 +104,16 @@ export class StataServerClient {
 			if_condition: ifCondition,
 			max_rows: maxRows,
 			session_id: sessionId,
+		});
+	}
+
+	async getWorkingDirectory(
+		sessionId?: string,
+		workingDirectory?: string,
+	): Promise<WorkingDirectoryResponse> {
+		return this.requestJson<WorkingDirectoryResponse>('GET', '/working_directory', {
+			session_id: sessionId,
+			working_dir: workingDirectory,
 		});
 	}
 

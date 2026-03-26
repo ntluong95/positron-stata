@@ -4455,6 +4455,86 @@ async def view_data_endpoint(if_condition: str = None, session_id: str = None, m
             status_code=500
         )
 
+@app.get("/working_directory", include_in_schema=False)
+async def working_directory_endpoint(session_id: str = None, working_dir: str = None):
+    """Get the current Stata working directory without printing to stdout."""
+    global stata_available, stata, multi_session_enabled, session_manager
+
+    try:
+        if multi_session_enabled and session_manager is not None:
+            result = await asyncio.to_thread(
+                session_manager.get_working_directory,
+                session_id=session_id,
+                working_dir=working_dir
+            )
+
+            if result.get('status') == 'error':
+                return Response(
+                    content=json.dumps({
+                        "status": "error",
+                        "message": result.get('error', 'Unknown error')
+                    }),
+                    media_type="application/json",
+                    status_code=500
+                )
+
+            return Response(
+                content=json.dumps({
+                    "status": "success",
+                    "directory": result.get('directory', '')
+                }),
+                media_type="application/json"
+            )
+
+        if not stata_available or stata is None:
+            return Response(
+                content=json.dumps({
+                    "status": "error",
+                    "message": "Stata is not initialized"
+                }),
+                media_type="application/json",
+                status_code=500
+            )
+
+        from session_manager import (
+            build_working_directory_probe_code,
+            parse_working_directory_output,
+        )
+
+        output = await asyncio.to_thread(
+            run_stata_command,
+            build_working_directory_probe_code(working_dir)
+        )
+
+        if output.startswith("Error running command:"):
+            return Response(
+                content=json.dumps({
+                    "status": "error",
+                    "message": output
+                }),
+                media_type="application/json",
+                status_code=500
+            )
+
+        return Response(
+            content=json.dumps({
+                "status": "success",
+                "directory": parse_working_directory_output(output)
+            }),
+            media_type="application/json"
+        )
+    except Exception as e:
+        logging.error(f"Error getting working directory: {str(e)}")
+        logging.error(traceback.format_exc())
+        return Response(
+            content=json.dumps({
+                "status": "error",
+                "message": str(e)
+            }),
+            media_type="application/json",
+            status_code=500
+        )
+
 @app.get("/interactive", include_in_schema=False)
 async def interactive_window(file: str = None, code: str = None):
     """Serve the interactive Stata window as a full webpage"""

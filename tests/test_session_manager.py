@@ -29,8 +29,11 @@ from session_manager import (
     SessionManager,
     SessionState,
     Session,
+    WORKING_DIRECTORY_END_MARKER,
+    WORKING_DIRECTORY_START_MARKER,
     init_session_manager,
-    get_session_manager
+    get_session_manager,
+    parse_working_directory_output,
 )
 from stata_worker import WorkerState, CommandType
 
@@ -128,6 +131,30 @@ class TestSessionManagerConfiguration(unittest.TestCase):
         # Should return True without creating workers
         self.assertTrue(manager.start())
         manager.stop()
+
+
+class TestWorkingDirectoryParsing(unittest.TestCase):
+    """Test cwd probe parsing without requiring a live Stata session."""
+
+    def test_parse_working_directory_output_handles_wrapped_quotes(self):
+        output = "\n".join([
+            f'. display "{WORKING_DIRECTORY_START_MARKER}"',
+            WORKING_DIRECTORY_START_MARKER,
+            '. capture noisily display c(pwd)',
+            '"/Users/example/Library/CloudStorage/OneDrive-SignitifyPBC/04',
+            '> EXPERIMENTS/positron-stata"',
+            f'. display "{WORKING_DIRECTORY_END_MARKER}"',
+            WORKING_DIRECTORY_END_MARKER,
+        ])
+
+        self.assertEqual(
+            parse_working_directory_output(output),
+            "/Users/example/Library/CloudStorage/OneDrive-SignitifyPBC/04 EXPERIMENTS/positron-stata",
+        )
+
+    def test_parse_working_directory_output_returns_empty_for_invalid_output(self):
+        self.assertEqual(parse_working_directory_output(""), "")
+        self.assertEqual(parse_working_directory_output('".\n>\n'), "")
 
 
 class TestSessionManagerLifecycle(unittest.TestCase):

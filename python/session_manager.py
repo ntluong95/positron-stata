@@ -83,6 +83,58 @@ def join_stata_line_continuations(code: str) -> str:
     return "\n".join(joined_lines)
 
 
+WORKING_DIRECTORY_START_MARKER = "__POSITRON_STATA_WORKING_DIRECTORY_START__"
+WORKING_DIRECTORY_END_MARKER = "__POSITRON_STATA_WORKING_DIRECTORY_END__"
+
+
+def build_working_directory_probe_code(seed_directory: Optional[str] = None) -> str:
+    """Build hidden Stata code that prints the current working directory."""
+    commands = []
+    if seed_directory:
+        escaped_directory = seed_directory.replace('"', '""')
+        commands.append(f'capture noisily cd "{escaped_directory}"')
+    commands.extend([
+        f'display "{WORKING_DIRECTORY_START_MARKER}"',
+        "capture noisily display c(pwd)",
+        f'display "{WORKING_DIRECTORY_END_MARKER}"',
+    ])
+    return "\n".join(commands)
+
+
+def parse_working_directory_output(output: str) -> str:
+    """Extract the current working directory from hidden probe output."""
+    if not output:
+        return ""
+
+    normalized = output.replace("\r\n", "\n").replace("\r", "\n")
+    fragments = []
+    capturing = False
+
+    for raw_line in normalized.split("\n"):
+        stripped = raw_line.strip()
+        if stripped == WORKING_DIRECTORY_START_MARKER:
+            capturing = True
+            continue
+        if stripped == WORKING_DIRECTORY_END_MARKER:
+            break
+        if not capturing:
+            continue
+        if not stripped or stripped.startswith("."):
+            continue
+        if stripped.startswith(">"):
+            stripped = stripped[1:]
+        fragments.append(stripped)
+
+    if not fragments:
+        return ""
+
+    directory = "".join(fragments).strip()
+    if len(directory) >= 2 and directory[0] == directory[-1] and directory[0] in {"'", '"'}:
+        directory = directory[1:-1]
+
+    return directory.strip()
+
+
 class SessionState(Enum):
     """Session lifecycle states"""
     CREATING = "creating"
@@ -789,6 +841,69 @@ class SessionManager:
                 "max_rows": extra.get('max_rows', max_rows)
             }
         return result
+
+    def get_working_directory(
+        self,
+        session_id: Optional[str] = None,
+        working_dir: Optional[str] = None,
+        timeout: Optional[float] = None
+    ) -> Dict[str, Any]:
+        """
+        Get the current working directory from a session.
+
+        Args:
+            session_id: Target session ID (None for default)
+            timeout: Command timeout in seconds
+
+        Returns:
+            Result dictionary with status and directory
+        """
+        session = self.get_session(session_id)
+        if not session:
+            if session_id and session_id != self.DEFAULT_SESSION_ID:
+                self._logger.info(f"Auto-creating session for cwd probe: {session_id}")
+                create_result = self.create_session(session_id)
+                if not create_result.get('success'):
+                    return {
+                        "status": "error",
+                        "error": f"Failed to auto-create session: {create_result.get('error', 'Unknown error')}"
+                    }
+                session = self.get_session(session_id)
+            if not session:
+                return {
+                    "status": "error",
+                    "error": f"Session not found: {session_id or 'default'}"
+                }
+
+        cwd_timeout = timeout or 10.0
+        if session.state in (SessionState.CREATING, SessionState.BUSY):
+            if not self.wait_for_ready(session, timeout=min(cwd_timeout, 5.0)):
+                return {
+                    "status": "error",
+                    "error": f"Session not ready: {session.state.value}"
+                }
+
+        if session.state != SessionState.READY:
+            return {
+                "status": "error",
+                "error": f"Session not ready: {session.state.value}"
+            }
+
+        result = self._execute_command(
+            session,
+            CommandType.EXECUTE,
+            {"code": build_working_directory_probe_code(working_dir), "timeout": cwd_timeout},
+            cwd_timeout
+        )
+
+        if result.get('status') != 'success':
+            return result
+
+        return {
+            "status": "success",
+            "directory": parse_working_directory_output(result.get('output', '')),
+            "session_id": session.session_id
+        }
 
     def stop_execution(self, session_id: Optional[str] = None) -> Dict[str, Any]:
         """

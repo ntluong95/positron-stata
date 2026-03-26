@@ -75,7 +75,7 @@
       {
         "command": "positronStata.createNewFile",
         "category": "Stata",
-        "title": "New Stata File"
+        "title": "New Stata .do File"
       },
       {
         "command": "positronStata.runSelection",

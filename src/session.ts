@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
 import * as positron from "positron";
@@ -50,6 +51,10 @@ interface VariableChildrenPayload {
   length: number;
 }
 
+interface UiWorkingDirectoryParams {
+  directory: string;
+}
+
 interface VariablesClearParams {
   include_hidden_objects?: boolean;
 }
@@ -61,6 +66,35 @@ interface VariablesDeleteParams {
 const DATASET_ACCESS_KEY = "__stata_dataset__";
 const COLUMN_ACCESS_KEY_PREFIX = "column:";
 const DATASET_VARIABLE_PATH = [DATASET_ACCESS_KEY];
+
+function aliasHome(directory: string): string {
+  if (!directory) {
+    return "";
+  }
+
+  const home = os.homedir();
+  if (!home) {
+    return directory;
+  }
+
+  const directoryCompare =
+    process.platform === "win32" ? directory.toLowerCase() : directory;
+  const homeCompare =
+    process.platform === "win32" ? home.toLowerCase() : home;
+
+  if (directoryCompare === homeCompare) {
+    return "~";
+  }
+
+  if (
+    directoryCompare.startsWith(`${homeCompare}/`) ||
+    directoryCompare.startsWith(`${homeCompare}\\`)
+  ) {
+    return `~${directory.slice(home.length)}`;
+  }
+
+  return directory;
+}
 
 /**
  * Parse a `browse` or `br` command, returning the if-condition (or empty
@@ -75,6 +109,25 @@ function parseBrowseCommand(code: string): string | null {
     return null;
   }
   return (match[5] ?? "").trim();
+}
+
+function parseChangeDirectoryCommand(code: string): string | null {
+  const relevantLine = code
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith("*") && !line.startsWith("//"))
+    .pop();
+
+  if (!relevantLine) {
+    return null;
+  }
+
+  const match = relevantLine.match(/^(?:cap(?:ture)?\s+)?cd\s+(.+)$/i);
+  if (!match?.[1]) {
+    return null;
+  }
+
+  return match[1].trim();
 }
 
 export class StataSession
@@ -94,6 +147,7 @@ export class StataSession
     | { executionId: string; request: StreamingRequest }
     | undefined;
   private _workingDirectory: string | undefined;
+  private _lastReportedWorkingDirectory: string | undefined;
   private _executionCount = 0;
   private _variablesVersion = 0;
   private readonly _dataExplorers = new Map<string, StataDataExplorer>();
@@ -123,6 +177,7 @@ export class StataSession
       inputPrompt: ".",
       continuationPrompt: ">",
     };
+    this._workingDirectory = this.resolveInitialWorkingDirectory();
   }
 
   get runtimeInfo(): positron.LanguageRuntimeInfo | undefined {
@@ -169,6 +224,7 @@ export class StataSession
     this.enterBusyState(executionId);
 
     let fullOutput = "";
+    let workingDirectoryChanged = false;
     try {
       const request = client.runFileStream(
         filePath,
@@ -194,6 +250,10 @@ export class StataSession
       );
       this._activeRequest = { executionId, request };
       await request.completion;
+      if (workingDirectory) {
+        this._workingDirectory = workingDirectory;
+        workingDirectoryChanged = true;
+      }
       await this.emitGraphsIfNeeded(executionId, fullOutput);
       const output = stripGraphMetadata(fullOutput);
       if (!output) {
@@ -215,6 +275,7 @@ export class StataSession
     } finally {
       this._activeRequest = undefined;
       this.enterIdleState(executionId);
+      await this.pollWorkingDirectory(workingDirectoryChanged);
       await this.refreshVariableClients();
     }
   }
@@ -284,6 +345,11 @@ export class StataSession
     }
     if (type === positron.RuntimeClientType.Help) {
       // Help comm opened by Positron; nothing to initialize
+    }
+    if (type === positron.RuntimeClientType.Ui) {
+      setTimeout(() => {
+        void this.pollWorkingDirectory(true, [id]);
+      }, 10);
     }
     return Promise.resolve();
   }
@@ -357,6 +423,7 @@ export class StataSession
     await client.destroySession(this.metadata.sessionId).catch(() => undefined);
     this._stateEmitter.fire(positron.RuntimeState.Ready);
     this._stateEmitter.fire(positron.RuntimeState.Idle);
+    await this.pollWorkingDirectory(true);
     await this.refreshVariableClients();
   }
 
@@ -425,6 +492,7 @@ export class StataSession
 
   async setWorkingDirectory(dir: string): Promise<void> {
     this._workingDirectory = dir || undefined;
+    await this.pollWorkingDirectory(true);
   }
 
   dispose(): void {
@@ -454,6 +522,7 @@ export class StataSession
 
     this.emitInput(executionId, code);
     this.enterBusyState(executionId);
+    let workingDirectoryChanged = false;
 
     try {
       const helpTopic = parseHelpCommand(trimmed);
@@ -501,6 +570,13 @@ export class StataSession
 
       this._activeRequest = { executionId, request };
       await request.completion;
+      const changedDirectory = this.resolveWorkingDirectoryTarget(
+        parseChangeDirectoryCommand(code),
+      );
+      if (changedDirectory) {
+        this._workingDirectory = changedDirectory;
+        workingDirectoryChanged = true;
+      }
       await this.emitGraphsIfNeeded(executionId, fullOutput);
 
       const output = stripGraphMetadata(fullOutput);
@@ -522,6 +598,7 @@ export class StataSession
         this._activeRequest = undefined;
       }
       this.enterIdleState(executionId);
+      await this.pollWorkingDirectory(workingDirectoryChanged);
       await this.refreshVariableClients();
     }
   }
@@ -546,6 +623,11 @@ export class StataSession
 
     if (clientType === positron.RuntimeClientType.Help) {
       await this.handleHelpClientMessage(clientId, messageId, message);
+      return;
+    }
+
+    if (clientType === positron.RuntimeClientType.Ui) {
+      this.sendClientResult(clientId, messageId, null);
       return;
     }
 
@@ -628,6 +710,45 @@ export class StataSession
 
   private async ensureClient(): Promise<StataServerClient> {
     return this._serverManager.ensureStarted(this._installation);
+  }
+
+  private resolveInitialWorkingDirectory(): string | undefined {
+    const configuration = getStataConfiguration();
+
+    if (configuration.workingDirectoryMode === "none") {
+      return undefined;
+    }
+
+    if (configuration.workingDirectoryMode === "extension") {
+      return path.join(this._extensionPath, "logs");
+    }
+
+    if (
+      configuration.workingDirectoryMode === "custom" &&
+      configuration.customWorkingDirectory
+    ) {
+      return configuration.customWorkingDirectory;
+    }
+
+    const activeEditor = vscode.window.activeTextEditor;
+    if (activeEditor?.document.uri.scheme === "file") {
+      return getWorkingDirectoryForFile(
+        activeEditor.document.uri.fsPath,
+        this._extensionPath,
+        configuration,
+      );
+    }
+
+    const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    if (!workspacePath) {
+      return undefined;
+    }
+
+    if (configuration.workingDirectoryMode === "parent") {
+      return path.dirname(workspacePath);
+    }
+
+    return workspacePath;
   }
 
   private buildStartupBanner(): string {
@@ -929,6 +1050,81 @@ export class StataSession
     this._variablesVersion += 1;
     const payload = await this.buildVariableListPayload();
     this.sendClientNotification(clientId, "refresh", payload);
+  }
+
+  private getClientIdsByType(type: positron.RuntimeClientType): string[] {
+    return [...this._clients.entries()]
+      .filter(([, clientType]) => clientType === type)
+      .map(([id]) => id);
+  }
+
+  private resolveWorkingDirectoryTarget(
+    target: string | null,
+  ): string | undefined {
+    if (!target) {
+      return undefined;
+    }
+
+    let normalizedTarget = target.trim();
+    if (
+      (normalizedTarget.startsWith('"') && normalizedTarget.endsWith('"')) ||
+      (normalizedTarget.startsWith("'") && normalizedTarget.endsWith("'"))
+    ) {
+      normalizedTarget = normalizedTarget.slice(1, -1);
+    }
+
+    if (!normalizedTarget) {
+      return undefined;
+    }
+
+    if (normalizedTarget === "~") {
+      return os.homedir();
+    }
+    if (
+      normalizedTarget.startsWith("~/") ||
+      normalizedTarget.startsWith("~\\")
+    ) {
+      return path.join(os.homedir(), normalizedTarget.slice(2));
+    }
+
+    if (path.isAbsolute(normalizedTarget)) {
+      return path.normalize(normalizedTarget);
+    }
+
+    const baseDirectory =
+      this._workingDirectory ||
+      vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    if (!baseDirectory) {
+      return path.normalize(normalizedTarget);
+    }
+
+    return path.resolve(baseDirectory, normalizedTarget);
+  }
+
+  private async pollWorkingDirectory(
+    force = false,
+    clientIds = this.getClientIdsByType(positron.RuntimeClientType.Ui),
+  ): Promise<void> {
+    if (clientIds.length === 0) {
+      return;
+    }
+
+    const directory = this._workingDirectory?.trim();
+    if (!directory) {
+      return;
+    }
+
+    if (!force && directory === this._lastReportedWorkingDirectory) {
+      return;
+    }
+
+    this._lastReportedWorkingDirectory = directory;
+    const params: UiWorkingDirectoryParams = {
+      directory: aliasHome(directory),
+    };
+    for (const clientId of clientIds) {
+      this.sendClientNotification(clientId, "working_directory", params);
+    }
   }
 
   private emitInput(parentId: string, code: string): void {

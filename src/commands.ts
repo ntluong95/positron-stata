@@ -59,11 +59,10 @@ export function registerCommands(
 ): void {
 	context.subscriptions.push(
 		vscode.commands.registerCommand('positronStata.createNewFile', async () => {
-			const document = await vscode.workspace.openTextDocument({
-				language: 'stata',
-				content: '',
-			});
-			await vscode.window.showTextDocument(document);
+			const untitledUri = vscode.Uri.parse('untitled:Untitled.do');
+			const document = await vscode.workspace.openTextDocument(untitledUri);
+			const stataDocument = await vscode.languages.setTextDocumentLanguage(document, 'stata');
+			await vscode.window.showTextDocument(stataDocument);
 		}),
 	);
 
@@ -138,13 +137,7 @@ export function registerCommands(
 				return;
 			}
 
-			const filter = await vscode.window.showInputBox({
-				prompt: 'Optional Stata if condition for data preview',
-				placeHolder: 'price > 5000 & mpg < 30',
-				ignoreFocusOut: true,
-			});
-
-			await session.showDataViewer(filter?.trim() || undefined);
+			await session.showDataViewer();
 		}),
 	);
 

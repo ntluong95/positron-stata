@@ -6,7 +6,7 @@ import { getStataConfiguration } from './configuration';
 import {
 	createInstallationId,
 	inferEditionFromPath,
-	inferStataVersionFromPath,
+	inferStataVersion,
 	ReasonDiscovered,
 	StataInstallation,
 } from './stata-installation';
@@ -31,7 +31,7 @@ function installationFromCandidate(
 	return {
 		id: createInstallationId(normalized, edition),
 		installationPath: normalized,
-		version: inferStataVersionFromPath(normalized),
+		version: inferStataVersion(normalized),
 		edition,
 		reasonDiscovered,
 		current,
