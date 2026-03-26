@@ -4,7 +4,6 @@
   "description": "Positron-native Stata extension that preserves the upstream stata-mcp server logic while adopting Positron runtime infrastructure.",
   "version": "0.1.0",
   "publisher": "ntluong95",
-  "license": "SEE LICENSE IN LICENSE.txt",
   "private": false,
   "repository": {
     "type": "git",

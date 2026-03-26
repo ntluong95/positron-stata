@@ -26,6 +26,7 @@ import {
 import { StataInstallation } from "./stata-installation";
 import { StataDataExplorer } from "./data-explorer";
 import { StataHelpServer } from "./help-server";
+import { buildStataConsoleBanner } from "./terminal";
 
 interface RuntimeResourceUsage {
   [key: string]: unknown;
@@ -630,11 +631,7 @@ export class StataSession
   }
 
   private buildStartupBanner(): string {
-    const version =
-      this._installation.version === "unknown"
-        ? ""
-        : ` ${this._installation.version}`;
-    return `Stata ${this._installation.edition.toUpperCase()}${version}\nPositron-native session backed by the Stata MCP server.\n`;
+    return buildStataConsoleBanner();
   }
 
   private async buildVariableListPayload(): Promise<VariableListPayload> {

@@ -5,6 +5,7 @@
     "outDir": "out",
     "moduleResolution": "nodenext",
     "lib": ["ES2020", "DOM"],
+    "types": ["node"],
     "sourceMap": true,
     "rootDir": "src",
     "strict": false,
