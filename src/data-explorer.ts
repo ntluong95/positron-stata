@@ -121,6 +121,22 @@ interface ColumnFilter {
   params?: Record<string, unknown>;
 }
 
+interface RowFilterComparisonParams {
+  op?: string;
+  value?: string;
+}
+
+interface RowFilterBetweenParams {
+  left_value?: string;
+  right_value?: string;
+}
+
+interface RowFilterSearchParams {
+  search_type?: string;
+  term?: string;
+  case_sensitive?: boolean;
+}
+
 interface ColumnHistogramParams {
   method?: string;
   num_bins?: number;
@@ -243,6 +259,9 @@ export class StataDataExplorer {
   private _data: DataViewResponse;
   private _title: string;
   private _schemas: ColumnSchema[];
+  private _columnFilters: ColumnFilter[] = [];
+  private _rowFilters: RowFilter[] = [];
+  private _filteredIndices: number[] | undefined;
   private _sortKeys: ColumnSortKey[] = [];
   private _sortedIndices: number[] | undefined;
 
@@ -295,7 +314,7 @@ export class StataDataExplorer {
       case "set_row_filters":
         return this.setRowFilters(params);
       case "set_column_filters":
-        return { filter_state: [] };
+        return this.setColumnFilters(params);
       case "get_column_profiles":
         return null;
       case "export_data_selection":
@@ -331,6 +350,9 @@ export class StataDataExplorer {
   updateData(data: DataViewResponse): void {
     this._data = data;
     this._schemas = this.buildSchemas();
+    this._columnFilters = [];
+    this._rowFilters = [];
+    this._filteredIndices = undefined;
     this._sortKeys = [];
     this._sortedIndices = undefined;
   }
@@ -339,7 +361,7 @@ export class StataDataExplorer {
     // Report the number of rows we can currently serve. Positron will request
     // data by row index, so table_shape must never exceed the locally cached
     // row count even if the server reports a larger total_rows value.
-    const numRows = this._data.data.length;
+    const numRows = this.getViewRowCount();
     const numColumns = this._data.columns.length;
     const unfilteredRows = this._data.total_rows || numRows;
 
@@ -351,8 +373,8 @@ export class StataDataExplorer {
         num_columns: numColumns,
       },
       has_row_labels: true,
-      column_filters: [],
-      row_filters: [],
+      column_filters: this._columnFilters,
+      row_filters: this._rowFilters,
       sort_keys: this._sortKeys,
       supported_features: {
         search_schema: {
@@ -369,13 +391,43 @@ export class StataDataExplorer {
           ],
         },
         set_column_filters: {
-          support_status: "unsupported",
-          supported_types: [],
+          support_status: "supported",
+          supported_types: [
+            {
+              column_filter_type: "text_search",
+              support_status: "supported",
+            },
+            {
+              column_filter_type: "match_data_types",
+              support_status: "supported",
+            },
+          ],
         },
         set_row_filters: {
-          support_status: "unsupported",
-          supports_conditions: "unsupported",
-          supported_types: [],
+          support_status: "supported",
+          supports_conditions: "supported",
+          supported_types: [
+            {
+              row_filter_type: "is_null",
+              support_status: "supported",
+            },
+            {
+              row_filter_type: "not_null",
+              support_status: "supported",
+            },
+            {
+              row_filter_type: "compare",
+              support_status: "supported",
+            },
+            {
+              row_filter_type: "between",
+              support_status: "supported",
+            },
+            {
+              row_filter_type: "search",
+              support_status: "supported",
+            },
+          ],
         },
         get_column_profiles: {
           support_status: "supported",
@@ -473,15 +525,16 @@ export class StataDataExplorer {
 
     const result: string[][] = [];
     const indexMap = this.getViewIndices();
+    const viewRowCount = this.getViewRowCount();
 
     for (const selection of selections) {
       const colIdx = selection.column_index;
       const spec = selection.spec;
       const startRow = spec?.first_index ?? 0;
-      const endRow = spec?.last_index ?? this._data.data.length - 1;
+      const endRow = spec?.last_index ?? viewRowCount - 1;
       const values: string[] = [];
 
-      for (let r = startRow; r <= endRow && r < this._data.data.length; r++) {
+      for (let r = startRow; r <= endRow && r < viewRowCount; r++) {
         const dataRow = indexMap ? indexMap[r] : r;
         if (dataRow === undefined || dataRow >= this._data.data.length) {
           values.push("");
@@ -505,11 +558,12 @@ export class StataDataExplorer {
       | { first_index: number; last_index: number }
       | undefined;
     const startRow = selection?.first_index ?? 0;
-    const endRow = selection?.last_index ?? this._data.data.length - 1;
+    const viewRowCount = this.getViewRowCount();
+    const endRow = selection?.last_index ?? viewRowCount - 1;
 
     const indexMap = this.getViewIndices();
     const labels: string[][] = [];
-    for (let r = startRow; r <= endRow && r < this._data.data.length; r++) {
+    for (let r = startRow; r <= endRow && r < viewRowCount; r++) {
       const dataRow = indexMap ? indexMap[r] : r;
       const obsNum =
         dataRow !== undefined
@@ -530,11 +584,25 @@ export class StataDataExplorer {
     return {};
   }
 
+  private setColumnFilters(
+    params: Record<string, unknown>,
+  ): Record<string, never> {
+    this._columnFilters = Array.isArray(params.filters)
+      ? (params.filters as ColumnFilter[])
+      : [];
+    return {};
+  }
+
   private setRowFilters(
-    _params: Record<string, unknown>,
+    params: Record<string, unknown>,
   ): { selected_num_rows: number; had_errors?: boolean } {
-    const numRows = this._data.total_rows || this._data.rows || 0;
-    return { selected_num_rows: numRows };
+    const filters = Array.isArray(params.filters)
+      ? (params.filters as RowFilter[])
+      : [];
+    this._rowFilters = filters;
+    this._filteredIndices = this.applyRowFilters(filters);
+    this._sortedIndices = undefined;
+    return { selected_num_rows: this.getViewRowCount() };
   }
 
   private exportDataSelection(
@@ -570,12 +638,13 @@ export class StataDataExplorer {
       (selection.selection as { first_index?: number })?.first_index ?? 0;
     const lastRow =
       (selection.selection as { last_index?: number })?.last_index ??
-      this._data.data.length - 1;
+      this.getViewRowCount() - 1;
     const indexMap = this.getViewIndices();
+    const viewRowCount = this.getViewRowCount();
 
     const header = this._data.columns.join(sep);
     const rows: string[] = [header];
-    for (let r = firstRow; r <= lastRow && r < this._data.data.length; r++) {
+    for (let r = firstRow; r <= lastRow && r < viewRowCount; r++) {
       const dataRow = indexMap ? indexMap[r] : r;
       const row = this._data.data[dataRow] ?? [];
       rows.push(row.map((cell) => this.formatValue(cell, {})).join(sep));
@@ -686,7 +755,7 @@ export class StataDataExplorer {
   }
 
   private getViewIndices(): number[] | undefined {
-    if (this._sortKeys.length === 0) {
+    if (!this._filteredIndices && this._sortKeys.length === 0) {
       return undefined;
     }
 
@@ -694,24 +763,249 @@ export class StataDataExplorer {
       return this._sortedIndices;
     }
 
-    const indices = Array.from({ length: this._data.data.length }, (_, i) => i);
-    const keys = this._sortKeys;
+    const indices = this._filteredIndices
+      ? [...this._filteredIndices]
+      : Array.from({ length: this._data.data.length }, (_, i) => i);
 
-    indices.sort((a, b) => {
-      for (const key of keys) {
-        const colIdx = key.column_index;
-        const va = this._data.data[a]?.[colIdx];
-        const vb = this._data.data[b]?.[colIdx];
-        const cmp = this.compareValues(va, vb);
-        if (cmp !== 0) {
-          return key.ascending ? cmp : -cmp;
+    if (this._sortKeys.length > 0) {
+      const keys = this._sortKeys;
+      indices.sort((a, b) => {
+        for (const key of keys) {
+          const colIdx = key.column_index;
+          const va = this._data.data[a]?.[colIdx];
+          const vb = this._data.data[b]?.[colIdx];
+          const cmp = this.compareValues(va, vb);
+          if (cmp !== 0) {
+            return key.ascending ? cmp : -cmp;
+          }
         }
-      }
-      return 0;
-    });
+        return 0;
+      });
+    }
 
     this._sortedIndices = indices;
     return indices;
+  }
+
+  private getViewRowCount(): number {
+    return this.getViewIndices()?.length ?? this._data.data.length;
+  }
+
+  private applyRowFilters(filters: RowFilter[]): number[] | undefined {
+    if (filters.length === 0) {
+      return undefined;
+    }
+
+    let mask: boolean[] | undefined;
+
+    for (const filter of filters) {
+      const filterMask = this.applySingleRowFilter(filter);
+      if (!mask) {
+        mask = filterMask;
+        continue;
+      }
+
+      const condition = String(filter.condition ?? "and").toLowerCase();
+      mask = mask.map((matches, index) =>
+        condition === "or"
+          ? matches || filterMask[index]
+          : matches && filterMask[index],
+      );
+    }
+
+    if (!mask) {
+      return undefined;
+    }
+
+    return mask.flatMap((matches, index) => (matches ? [index] : []));
+  }
+
+  private applySingleRowFilter(filter: RowFilter): boolean[] {
+    const columnIndex = filter.column_schema?.column_index;
+    if (
+      typeof columnIndex !== "number" ||
+      columnIndex < 0 ||
+      columnIndex >= this._schemas.length
+    ) {
+      return Array.from({ length: this._data.data.length }, () => true);
+    }
+
+    return this._data.data.map((row) =>
+      this.valueMatchesFilter(row?.[columnIndex], filter),
+    );
+  }
+
+  private valueMatchesFilter(value: unknown, filter: RowFilter): boolean {
+    switch (filter.filter_type) {
+      case "is_null":
+        return this.isMissingValue(value);
+      case "not_null":
+        return !this.isMissingValue(value);
+      case "compare":
+        return this.applyComparisonFilter(
+          value,
+          (filter.params ?? {}) as RowFilterComparisonParams,
+          filter.column_schema.type_display,
+        );
+      case "between":
+        return this.applyBetweenFilter(
+          value,
+          (filter.params ?? {}) as RowFilterBetweenParams,
+          filter.column_schema.type_display,
+        );
+      case "search":
+        return this.applySearchFilter(
+          value,
+          (filter.params ?? {}) as RowFilterSearchParams,
+        );
+      default:
+        return true;
+    }
+  }
+
+  private applyComparisonFilter(
+    value: unknown,
+    params: RowFilterComparisonParams,
+    typeDisplay: ColumnDisplayType,
+  ): boolean {
+    if (this.isMissingValue(value)) {
+      return false;
+    }
+
+    const op = String(params.op ?? "=");
+    const compareValue = params.value ?? "";
+
+    if (
+      typeDisplay === "integer" ||
+      typeDisplay === "floating" ||
+      typeDisplay === "decimal"
+    ) {
+      const left = this.coerceNumberValue(value);
+      const right = this.coerceNumberValue(compareValue);
+      if (left !== undefined && right !== undefined) {
+        return this.evaluateComparison(left, op, right);
+      }
+    }
+
+    if (typeDisplay === "date" || typeDisplay === "datetime" || typeDisplay === "time") {
+      const left = this.coerceDateValue(value);
+      const right = this.coerceDateValue(compareValue);
+      if (left && right) {
+        return this.evaluateComparison(left.timestamp, op, right.timestamp);
+      }
+    }
+
+    const left = this.normalizeStringValue(value);
+    const right = this.normalizeStringValue(compareValue);
+    return this.evaluateComparison(left, op, right);
+  }
+
+  private applyBetweenFilter(
+    value: unknown,
+    params: RowFilterBetweenParams,
+    typeDisplay: ColumnDisplayType,
+  ): boolean {
+    if (this.isMissingValue(value)) {
+      return false;
+    }
+
+    const leftValue = params.left_value ?? "";
+    const rightValue = params.right_value ?? "";
+
+    if (
+      typeDisplay === "integer" ||
+      typeDisplay === "floating" ||
+      typeDisplay === "decimal"
+    ) {
+      const valueNumber = this.coerceNumberValue(value);
+      const left = this.coerceNumberValue(leftValue);
+      const right = this.coerceNumberValue(rightValue);
+      if (
+        valueNumber !== undefined &&
+        left !== undefined &&
+        right !== undefined
+      ) {
+        return valueNumber >= left && valueNumber <= right;
+      }
+    }
+
+    if (typeDisplay === "date" || typeDisplay === "datetime" || typeDisplay === "time") {
+      const dateValue = this.coerceDateValue(value);
+      const left = this.coerceDateValue(leftValue);
+      const right = this.coerceDateValue(rightValue);
+      if (dateValue && left && right) {
+        return (
+          dateValue.timestamp >= left.timestamp &&
+          dateValue.timestamp <= right.timestamp
+        );
+      }
+    }
+
+    const textValue = this.normalizeStringValue(value);
+    const left = this.normalizeStringValue(leftValue);
+    const right = this.normalizeStringValue(rightValue);
+    return textValue >= left && textValue <= right;
+  }
+
+  private applySearchFilter(
+    value: unknown,
+    params: RowFilterSearchParams,
+  ): boolean {
+    if (this.isMissingValue(value)) {
+      return false;
+    }
+
+    const caseSensitive = Boolean(params.case_sensitive);
+    const searchType = String(params.search_type ?? "contains");
+    let text = this.normalizeStringValue(value);
+    let term = String(params.term ?? "");
+
+    if (!caseSensitive) {
+      text = text.toLowerCase();
+      term = term.toLowerCase();
+    }
+
+    switch (searchType) {
+      case "starts_with":
+        return text.startsWith(term);
+      case "ends_with":
+        return text.endsWith(term);
+      case "not_contains":
+        return !text.includes(term);
+      case "regex_match":
+        try {
+          return new RegExp(params.term ?? "", caseSensitive ? "" : "i").test(
+            this.normalizeStringValue(value),
+          );
+        } catch {
+          return false;
+        }
+      case "contains":
+      default:
+        return text.includes(term);
+    }
+  }
+
+  private evaluateComparison<T extends number | string>(
+    left: T,
+    op: string,
+    right: T,
+  ): boolean {
+    switch (op) {
+      case "!=":
+        return left !== right;
+      case "<":
+        return left < right;
+      case "<=":
+        return left <= right;
+      case ">":
+        return left > right;
+      case ">=":
+        return left >= right;
+      case "=":
+      default:
+        return left === right;
+    }
   }
 
   private compareValues(a: unknown, b: unknown): number {
