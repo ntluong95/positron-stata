@@ -6,6 +6,12 @@ import { getWorkingDirectoryForFile } from './configuration';
 import { StataRuntimeManager } from './runtime-manager';
 import { StataServerManager } from './server-manager';
 import { StataSession } from './session';
+import { getNextStataExecutablePosition, getStataBlockBounds } from './stata-selection';
+
+interface EditorCommandTarget {
+	code: string;
+	endLine: number;
+}
 
 async function getOrStartStataSession(
 	runtimeManager: StataRuntimeManager,
@@ -45,11 +51,84 @@ function isStataEditor(editor: vscode.TextEditor | undefined): editor is vscode.
 	return /\.(do|ado|doh|mata)$/i.test(editor.document.uri.fsPath);
 }
 
-function getSelectionOrCurrentLine(editor: vscode.TextEditor): string {
-	if (!editor.selection.isEmpty) {
-		return editor.document.getText(editor.selection);
+function getDocumentLines(document: vscode.TextDocument): string[] {
+	return Array.from({ length: document.lineCount }, (_, lineNumber) => (
+		document.lineAt(lineNumber).text
+	));
+}
+
+function getSelectionEndLine(selection: vscode.Selection): number {
+	if (
+		selection.end.character === 0
+		&& selection.end.line > selection.start.line
+	) {
+		return selection.end.line - 1;
 	}
-	return editor.document.lineAt(editor.selection.active.line).text;
+
+	return selection.end.line;
+}
+
+function getSelectionOrCurrentCommand(editor: vscode.TextEditor, lines: readonly string[]): EditorCommandTarget {
+	if (!editor.selection.isEmpty) {
+		return {
+			code: editor.document.getText(editor.selection),
+			endLine: getSelectionEndLine(editor.selection),
+		};
+	}
+
+	const { startLine, endLine } = getStataBlockBounds(lines, editor.selection.active.line);
+	const start = new vscode.Position(startLine, 0);
+	const end = editor.document.lineAt(endLine).range.end;
+	return {
+		code: editor.document.getText(new vscode.Range(start, end)),
+		endLine,
+	};
+}
+
+function moveCursor(editor: vscode.TextEditor, lineNumber: number, character: number): void {
+	const position = new vscode.Position(lineNumber, character);
+	editor.selection = new vscode.Selection(position, position);
+	editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+}
+
+async function executeEditorCommand(
+	editor: vscode.TextEditor,
+	context: vscode.ExtensionContext,
+	runtimeManager: StataRuntimeManager,
+	advanceToNextBlock: boolean,
+): Promise<void> {
+	const lines = getDocumentLines(editor.document);
+	const commandTarget = getSelectionOrCurrentCommand(editor, lines);
+	const code = commandTarget.code.trim();
+	if (!code) {
+		return;
+	}
+
+	const session = await getOrStartStataSession(runtimeManager);
+	if (!session) {
+		return;
+	}
+
+	const workingDirectory = getWorkingDirectoryForFile(editor.document.uri.fsPath, context.extensionPath);
+	if (workingDirectory) {
+		await session.setWorkingDirectory(workingDirectory);
+	}
+
+	session.execute(
+		code,
+		randomUUID(),
+		positron.RuntimeCodeExecutionMode.Interactive,
+		positron.RuntimeErrorBehavior.Continue,
+	);
+
+	if (!advanceToNextBlock) {
+		return;
+	}
+
+	const nextPosition = getNextStataExecutablePosition(lines, commandTarget.endLine);
+	if (nextPosition) {
+		moveCursor(editor, nextPosition.line, nextPosition.character);
+	}
 }
 
 export function registerCommands(
@@ -74,27 +153,19 @@ export function registerCommands(
 				return;
 			}
 
-			const code = getSelectionOrCurrentLine(editor).trim();
-			if (!code) {
+			await executeEditorCommand(editor, context, runtimeManager, false);
+		}),
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand('positronStata.runSelectionAndAdvance', async () => {
+			const editor = vscode.window.activeTextEditor;
+			if (!isStataEditor(editor)) {
+				vscode.window.showWarningMessage('Open a Stata source file to run code.');
 				return;
 			}
 
-			const session = await getOrStartStataSession(runtimeManager);
-			if (!session) {
-				return;
-			}
-
-			const workingDirectory = getWorkingDirectoryForFile(editor.document.uri.fsPath, context.extensionPath);
-			if (workingDirectory) {
-				await session.setWorkingDirectory(workingDirectory);
-			}
-
-			session.execute(
-				code,
-				randomUUID(),
-				positron.RuntimeCodeExecutionMode.Interactive,
-				positron.RuntimeErrorBehavior.Continue,
-			);
+			await executeEditorCommand(editor, context, runtimeManager, true);
 		}),
 	);
 

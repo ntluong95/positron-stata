@@ -2,7 +2,7 @@
   "name": "positron-stata",
   "displayName": "Stata for Positron",
   "description": "Positron-native Stata extension that preserves the upstream stata-mcp server logic while adopting Positron runtime infrastructure.",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "publisher": "ntluong95",
   "private": false,
   "repository": {
@@ -35,6 +35,7 @@
     "onLanguage:stata",
     "onCommand:positronStata.createNewFile",
     "onCommand:positronStata.runSelection",
+    "onCommand:positronStata.runSelectionAndAdvance",
     "onCommand:positronStata.runFile",
     "onCommand:positronStata.stopExecution",
     "onCommand:positronStata.viewData",
@@ -81,6 +82,11 @@
         "command": "positronStata.runSelection",
         "category": "Stata",
         "title": "Run Selection or Current Line"
+      },
+      {
+        "command": "positronStata.runSelectionAndAdvance",
+        "category": "Stata",
+        "title": "Run Selection or Current Line and Advance"
       },
       {
         "command": "positronStata.runFile",
@@ -159,7 +165,13 @@
     },
     "keybindings": [
       {
-        "command": "positronStata.runSelection",
+        "command": "positronStata.runSelectionAndAdvance",
+        "key": "ctrl+enter",
+        "mac": "cmd+enter",
+        "when": "editorTextFocus && (editorLangId == stata || resourceExtname == .do || resourceExtname == .ado || resourceExtname == .doh || resourceExtname == .mata)"
+      },
+      {
+        "command": "positronStata.runSelectionAndAdvance",
         "key": "ctrl+shift+enter",
         "mac": "cmd+shift+enter",
         "when": "editorTextFocus && (editorLangId == stata || resourceExtname == .do || resourceExtname == .ado || resourceExtname == .doh || resourceExtname == .mata)"
