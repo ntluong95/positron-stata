@@ -2,17 +2,17 @@
   "name": "positron-stata-mcp",
   "displayName": "Stata MCP for Positron",
   "description": "Positron-native Stata extension that preserves the upstream stata-mcp server logic while adopting Positron runtime infrastructure.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "ntluong95",
   "private": false,
   "repository": {
     "type": "git",
-    "url": "https://github.com/ntluong95/positron-stata-mcp"
+    "url": "https://github.com/ntluong95/positron-stata"
   },
-  "qna": "https://github.com/ntluong95/positron-stata-mcp/issues",
-  "homepage": "https://github.com/ntluong95/positron-stata-mcp",
+  "qna": "https://github.com/ntluong95/positron-stata/issues",
+  "homepage": "https://github.com/ntluong95/positron-stata",
   "bugs": {
-    "url": "https://github.com/ntluong95/positron-stata-mcp/issues"
+    "url": "https://github.com/ntluong95/positron-stata/issues"
   },
   "engines": {
     "vscode": "^1.99.0"

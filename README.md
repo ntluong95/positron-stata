@@ -6,43 +6,43 @@
 
 ### Console
 
-![Console pane](resources/console.png)
+![Console pane](https://raw.githubusercontent.com/ntluong95/positron-stata/refs/heads/main/resources/console.png)
 
 Interactive Stata console backed by the MCP server, showing session startup and the prompt for running commands.
 
 ### Data Explorer
 
-![Data Explorer](resources/data_explorer.png)
+![Data Explorer](https://raw.githubusercontent.com/ntluong95/positron-stata/refs/heads/main/resources/data_explorer.png)
 
 Interactive data viewer showing variables, brief summaries and a spreadsheet-like table for `browse` output. It also support display variable label as a tooltip, summary statistics and filtering data
 
 ### DO-file Editor & Syntax
 
-![DO-file syntax highlighting](resources/dofile_syntax.png)
+![DO-file syntax highlighting](https://raw.githubusercontent.com/ntluong95/positron-stata/refs/heads/main/resources/dofile_syntax.png)
 
 Stata `.do` file editor with syntax highlighting, inline execution controls, and integrated results.
 
 ### Environment & Plots
 
-![Environment and plot panes](resources/environment_and_plot.png)
+![Environment and plot panes](https://raw.githubusercontent.com/ntluong95/positron-stata/refs/heads/main/resources/environment_and_plot.png)
 
 Session variables and Plots pane — exported Stata graphs render directly inside Positron.
 
 ### Help Pane
 
-![Help pane](resources/help_pane.png)
+![Help pane](https://raw.githubusercontent.com/ntluong95/positron-stata/refs/heads/main/resources/help_pane.png)
 
 Rendered Stata help topics with syntax, options and examples available inline in the Help pane.
 
 ### History
 
-![History pane](resources/history_pane.png)
+![History pane](https://raw.githubusercontent.com/ntluong95/positron-stata/refs/heads/main/resources/history_pane.png)
 
 Command history panel that preserves executed commands and can re-run or send commands back to the console.
 
 ### Inline Output (Quarto)
 
-![Inline output in QMD](resources/inline_ouput_qmd.png)
+![Inline output in QMD](https://raw.githubusercontent.com/ntluong95/positron-stata/refs/heads/main/resources/inline_ouput_qmd.png)
 
 Preview of Stata output embedded inline in Quarto (.qmd) documents — rendered code results and plots appear directly alongside narrative text.
 
