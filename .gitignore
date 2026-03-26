@@ -1,0 +1,16 @@
+node_modules/
+out/
+.venv/
+*.vsix
+.python-path
+.uv-path
+.setup-complete
+logs/
+*.log
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.DS_Store
+build.md
+MIGRATION.md
+.vscodeignore

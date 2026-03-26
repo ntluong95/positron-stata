@@ -1,0 +1,156 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Stata",
+  "scopeName": "source.stata",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#macros" },
+    { "include": "#numbers" },
+    { "include": "#control" },
+    { "include": "#keywords" },
+    { "include": "#commands" },
+    { "include": "#operators" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.block.stata",
+          "begin": "/\\*",
+          "end": "\\*/"
+        },
+        {
+          "name": "comment.line.double-slash.stata",
+          "match": "//.*$"
+        },
+        {
+          "name": "comment.line.triple-slash.stata",
+          "match": "///.*$"
+        },
+        {
+          "name": "comment.line.star.stata",
+          "match": "^\\s*\\*.*$"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.compound.stata",
+          "begin": "`\"",
+          "end": "\"'"
+        },
+        {
+          "name": "string.quoted.double.stata",
+          "begin": "\"",
+          "end": "\""
+        }
+      ]
+    },
+    "macros": {
+      "patterns": [
+        {
+          "name": "variable.other.local.stata",
+          "match": "`[a-zA-Z_][a-zA-Z0-9_]*'"
+        },
+        {
+          "name": "variable.other.local.stata",
+          "match": "`[^']*'"
+        },
+        {
+          "name": "variable.other.global.stata",
+          "match": "\\$\\{?[a-zA-Z_][a-zA-Z0-9_]*\\}?"
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.stata",
+          "match": "\\b[0-9]+(\\.[0-9]+)?([eE][+-]?[0-9]+)?\\b"
+        },
+        {
+          "name": "constant.language.missing.stata",
+          "match": "\\b\\.[a-z]?\\b"
+        }
+      ]
+    },
+    "control": {
+      "patterns": [
+        {
+          "name": "keyword.control.stata",
+          "match": "\\b(if|else|while|foreach|forvalues|in|of|local|global|program|end|define|exit|continue|break|return|mata|version|qui|quietly|cap|capture|noi|noisily|preserve|restore|tempvar|tempname|tempfile|args|syntax|confirm|gettoken|tokenize|timer|set)\\b"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.other.stata",
+          "match": "\\b(using|replace|clear|all|varlist|newlist|string|numeric|integer|matrix|scalar|var|by|bysort|sort|xi|svy|mi|st|xt|me|sem|gsem|bayesmh)\\b"
+        },
+        {
+          "name": "support.type.stata",
+          "match": "\\b(byte|int|long|float|double|str[0-9]*|strL)\\b"
+        }
+      ]
+    },
+    "commands": {
+      "patterns": [
+        {
+          "name": "support.function.data.stata",
+          "match": "\\b(use|save|import|export|insheet|outsheet|infile|infix|merge|append|reshape|collapse|contract|fillin|cross|joinby|stack|xpose|compress|recast|destring|tostring|encode|decode)\\b"
+        },
+        {
+          "name": "support.function.manipulation.stata",
+          "match": "\\b(gen|generate|replace|drop|keep|rename|recode|label|order|sort|gsort|duplicates|isid|levelsof|egen|bysort|assert|count|distinct|fre)\\b"
+        },
+        {
+          "name": "support.function.statistics.stata",
+          "match": "\\b(regress|reg|logit|logistic|probit|ologit|oprobit|mlogit|poisson|nbreg|tobit|truncreg|heckman|ivregress|ivreg2|xtreg|xtivreg|xtlogit|xtpoisson|areg|reghdfe|didregress|diff_in_diff|rdrobust|synth|binscatter|lpoly|lowess|qreg|rreg|sureg|sem|gsem|mixed|melogit|bayesmh|bayes|bootstrap|jackknife|permute|simulate|power|sampsi)\\b"
+        },
+        {
+          "name": "support.function.descriptive.stata",
+          "match": "\\b(summarize|sum|tabulate|tab|table|describe|des|codebook|inspect|list|browse|br|edit|ed|display|di|correlate|cor|pwcorr|mean|proportion|ratio|total|ci|centile|pctile|xtile|histogram|kdensity|stem|symplot|qnorm|pnorm|gladder|ladder)\\b"
+        },
+        {
+          "name": "support.function.testing.stata",
+          "match": "\\b(test|testnl|lincom|nlcom|margins|marginsplot|contrast|pwcompare|predict|estat|fitstat|lrtest|hausman|overid|weakiv|ivendog|anova|oneway|ttest|ranksum|signrank|kwallis|ksmirnov|swilk|sktest|vif|hettest|bpagan|dwstat|durbina|actest|archlm|ovtest|linktest)\\b"
+        },
+        {
+          "name": "support.function.graphics.stata",
+          "match": "\\b(graph|twoway|scatter|line|connected|area|bar|dot|box|pie|histogram|kdensity|qnorm|pnorm|qqplot|spike|dropline|rarea|rbar|rcap|rline|rscatter|rcapsym|function|matrix|combine|hbar|scheme|grstyle|coefplot|plotmatrix|maptile|spmap|grmap)\\b"
+        },
+        {
+          "name": "support.function.io.stata",
+          "match": "\\b(sysuse|webuse|bcuse|freduse|wbopendata|cd|dir|ls|copy|erase|mkdir|rmdir|type|cat|file|filefilter|log|cmdlog|translate|set|query|adopath|ssc|net|ado|which|findfile|mata)\\b"
+        },
+        {
+          "name": "support.function.estimation.stata",
+          "match": "\\b(eststo|esttab|estout|estimates|ereturn|return|matrix|scalar|constraint|ml|gmm|nlsur|frontier|stcox|streg|stset|stdes|stsum|sts|stcurve|stpower|ltable|ctset|snapshot)\\b"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.comparison.stata",
+          "match": "(==|!=|>=|<=|>|<)"
+        },
+        {
+          "name": "keyword.operator.logical.stata",
+          "match": "\\b(\\&|\\||!)\\b|&&|\\|\\|"
+        },
+        {
+          "name": "keyword.operator.arithmetic.stata",
+          "match": "(\\+|-|\\*|/|\\^)"
+        },
+        {
+          "name": "keyword.operator.assignment.stata",
+          "match": "="
+        }
+      ]
+    }
+  }
+}

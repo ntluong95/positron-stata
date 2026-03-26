@@ -1,0 +1,353 @@
+{
+  "name": "positron-stata-mcp",
+  "displayName": "Positron Stata MCP",
+  "description": "Positron-native Stata extension that preserves the upstream stata-mcp server logic while adopting Positron runtime infrastructure.",
+  "version": "0.1.0",
+  "publisher": "ntluong95",
+  "license": "SEE LICENSE IN LICENSE.txt",
+  "private": false,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ntluong95/positron-stata-mcp"
+  },
+  "qna": "https://github.com/ntluong95/positron-stata-mcp/issues",
+  "homepage": "https://github.com/ntluong95/positron-stata-mcp",
+  "bugs": {
+    "url": "https://github.com/ntluong95/positron-stata-mcp/issues"
+  },
+  "engines": {
+    "vscode": "^1.99.0"
+  },
+  "keywords": [
+    "stata",
+    "positron",
+    "mcp",
+    "statistics",
+    "data science"
+  ],
+  "categories": [
+    "Programming Languages",
+    "Data Science"
+  ],
+  "main": "./out/extension.js",
+  "icon": "./resources/branding/stata-logo.png",
+  "activationEvents": [
+    "onLanguageRuntime:stata",
+    "onLanguage:stata",
+    "onCommand:positronStata.createNewFile",
+    "onCommand:positronStata.runSelection",
+    "onCommand:positronStata.runFile",
+    "onCommand:positronStata.stopExecution",
+    "onCommand:positronStata.viewData",
+    "onCommand:positronStata.restartSession",
+    "onCommand:positronStata.testServerConnection",
+    "onCommand:positronStata.showLogs"
+  ],
+  "contributes": {
+    "languageRuntimes": [
+      {
+        "languageId": "stata"
+      }
+    ],
+    "languages": [
+      {
+        "id": "stata",
+        "extensions": [
+          ".do",
+          ".ado",
+          ".doh",
+          ".mata"
+        ],
+        "aliases": [
+          "Stata",
+          "stata"
+        ],
+        "configuration": "./language-configuration/stata-language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "stata",
+        "scopeName": "source.stata",
+        "path": "./syntaxes/stata.tmLanguage.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "positronStata.createNewFile",
+        "category": "Stata",
+        "title": "New Stata File"
+      },
+      {
+        "command": "positronStata.runSelection",
+        "category": "Stata",
+        "title": "Run Selection or Current Line",
+        "icon": "$(play)"
+      },
+      {
+        "command": "positronStata.runFile",
+        "category": "Stata",
+        "title": "Run Current File",
+        "icon": "$(run-all)"
+      },
+      {
+        "command": "positronStata.stopExecution",
+        "category": "Stata",
+        "title": "Stop Execution",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "positronStata.viewData",
+        "category": "Stata",
+        "title": "View Data",
+        "icon": "$(table)"
+      },
+      {
+        "command": "positronStata.restartSession",
+        "category": "Stata",
+        "title": "Restart Session",
+        "icon": "$(debug-restart)"
+      },
+      {
+        "command": "positronStata.testServerConnection",
+        "category": "Stata",
+        "title": "Test Server Connection"
+      },
+      {
+        "command": "positronStata.showLogs",
+        "category": "Stata",
+        "title": "Show Extension Logs"
+      }
+    ],
+    "menus": {
+      "file/newFile": [
+        {
+          "command": "positronStata.createNewFile",
+          "group": "file",
+          "when": "!virtualWorkspace"
+        }
+      ],
+      "editor/title": [
+        {
+          "when": "resourceExtname == .do || resourceExtname == .ado || resourceExtname == .doh || resourceExtname == .mata || editorLangId == stata",
+          "command": "positronStata.runSelection",
+          "group": "navigation"
+        },
+        {
+          "when": "resourceExtname == .do || resourceExtname == .ado || resourceExtname == .doh || resourceExtname == .mata || editorLangId == stata",
+          "command": "positronStata.runFile",
+          "group": "navigation"
+        },
+        {
+          "when": "resourceExtname == .do || resourceExtname == .ado || resourceExtname == .doh || resourceExtname == .mata || editorLangId == stata",
+          "command": "positronStata.stopExecution",
+          "group": "navigation"
+        },
+        {
+          "when": "resourceExtname == .do || resourceExtname == .ado || resourceExtname == .doh || editorLangId == stata",
+          "command": "positronStata.viewData",
+          "group": "navigation"
+        },
+        {
+          "when": "resourceExtname == .do || resourceExtname == .ado || resourceExtname == .doh || resourceExtname == .mata || editorLangId == stata",
+          "command": "positronStata.restartSession",
+          "group": "navigation"
+        }
+      ],
+      "editor/context": [
+        {
+          "when": "resourceExtname == .do || resourceExtname == .ado || resourceExtname == .doh || resourceExtname == .mata || editorLangId == stata",
+          "command": "positronStata.runSelection",
+          "group": "1_stata"
+        },
+        {
+          "when": "resourceExtname == .do || resourceExtname == .ado || resourceExtname == .doh || resourceExtname == .mata || editorLangId == stata",
+          "command": "positronStata.runFile",
+          "group": "1_stata"
+        },
+        {
+          "when": "resourceExtname == .do || resourceExtname == .ado || resourceExtname == .doh || resourceExtname == .mata || editorLangId == stata",
+          "command": "positronStata.stopExecution",
+          "group": "1_stata"
+        },
+        {
+          "when": "resourceExtname == .do || resourceExtname == .ado || resourceExtname == .doh || editorLangId == stata",
+          "command": "positronStata.viewData",
+          "group": "1_stata"
+        },
+        {
+          "when": "resourceExtname == .do || resourceExtname == .ado || resourceExtname == .doh || resourceExtname == .mata || editorLangId == stata",
+          "command": "positronStata.restartSession",
+          "group": "1_stata"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "positronStata.runSelection",
+        "key": "ctrl+shift+enter",
+        "mac": "cmd+shift+enter",
+        "when": "editorTextFocus && (editorLangId == stata || resourceExtname == .do || resourceExtname == .ado || resourceExtname == .doh || resourceExtname == .mata)"
+      },
+      {
+        "command": "positronStata.runFile",
+        "key": "ctrl+shift+d",
+        "mac": "cmd+shift+d",
+        "when": "editorTextFocus && (editorLangId == stata || resourceExtname == .do || resourceExtname == .ado || resourceExtname == .doh || resourceExtname == .mata)"
+      },
+      {
+        "command": "positronStata.stopExecution",
+        "key": "ctrl+shift+c",
+        "mac": "cmd+shift+c",
+        "when": "editorTextFocus && (editorLangId == stata || resourceExtname == .do || resourceExtname == .ado || resourceExtname == .doh || resourceExtname == .mata)"
+      }
+    ],
+    "configuration": {
+      "title": "Stata",
+      "properties": {
+        "positron.stata.installationPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the Stata installation directory."
+        },
+        "positron.stata.edition": {
+          "type": "string",
+          "enum": [
+            "mp",
+            "se",
+            "be"
+          ],
+          "default": "mp",
+          "description": "Stata edition to use when launching worker processes."
+        },
+        "positron.stata.server.host": {
+          "type": "string",
+          "default": "localhost",
+          "description": "Host to bind the bundled Stata MCP server to."
+        },
+        "positron.stata.server.port": {
+          "type": "number",
+          "default": 4000,
+          "description": "Port used by the bundled Stata MCP server."
+        },
+        "positron.stata.server.autoStart": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically warm the bundled Stata MCP server when the extension activates."
+        },
+        "positron.stata.server.forcePort": {
+          "type": "boolean",
+          "default": false,
+          "description": "Attempt to reclaim the configured port before starting the bundled server."
+        },
+        "positron.stata.debug": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable verbose logging for the Positron extension and Python Stata server."
+        },
+        "positron.stata.autoDisplayGraphs": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically surface generated graphs in Positron's Plots pane."
+        },
+        "positron.stata.runSelectionTimeout": {
+          "type": "number",
+          "default": 600,
+          "description": "Timeout in seconds for interactive execution and console selections."
+        },
+        "positron.stata.runFileTimeout": {
+          "type": "number",
+          "default": 600,
+          "description": "Timeout in seconds for do-file execution."
+        },
+        "positron.stata.workingDirectory.mode": {
+          "type": "string",
+          "enum": [
+            "dofile",
+            "parent",
+            "workspace",
+            "extension",
+            "custom",
+            "none"
+          ],
+          "default": "dofile",
+          "description": "Working directory strategy for do-file execution."
+        },
+        "positron.stata.workingDirectory.customPath": {
+          "type": "string",
+          "default": "",
+          "description": "Custom working directory used when workingDirectory.mode is set to custom."
+        },
+        "positron.stata.mcp.resultDisplayMode": {
+          "type": "string",
+          "enum": [
+            "compact",
+            "full"
+          ],
+          "default": "compact",
+          "description": "Output filtering mode used by the retained Stata MCP server."
+        },
+        "positron.stata.mcp.maxOutputTokens": {
+          "type": "number",
+          "default": 10000,
+          "description": "Approximate token budget for MCP responses before the Python server falls back to file output."
+        },
+        "positron.stata.multiSession.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the original multi-session worker model from stata-mcp."
+        },
+        "positron.stata.multiSession.maxSessions": {
+          "type": "number",
+          "default": 100,
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Maximum number of concurrent Stata worker sessions."
+        },
+        "positron.stata.multiSession.sessionTimeout": {
+          "type": "number",
+          "default": 3600,
+          "minimum": 60,
+          "description": "Idle timeout in seconds before an unused Stata worker is reclaimed."
+        },
+        "positron.stata.dataViewer.maxRows": {
+          "type": "number",
+          "default": 100000,
+          "minimum": 100,
+          "description": "Maximum rows returned to the Positron data viewer command."
+        }
+      }
+    },
+    "configurationDefaults": {
+      "[stata]": {
+        "editor.tabSize": 4,
+        "editor.insertSpaces": true
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts",
+    "package": "vsce package",
+    "python:setup": "node ./python/check-python.js",
+    "start:server": "node ./python/start-server.js --port 4000 --force-port",
+    "verify": "npm run compile && npm run package"
+  },
+  "devDependencies": {
+    "@types/node": "14.x",
+    "@types/glob": "^7.2.0",
+    "@typescript-eslint/eslint-plugin": "^5.12.1",
+    "@typescript-eslint/parser": "^5.12.1",
+    "@vscode/vsce": "^3.3.2",
+    "eslint": "^8.9.0",
+    "typescript": "^4.5.5"
+  },
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "Bundled Stata MCP services require a trusted workspace."
+    }
+  }
+}
