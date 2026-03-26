@@ -1,6 +1,6 @@
 {
   "name": "positron-stata-mcp",
-  "displayName": "Positron Stata MCP",
+  "displayName": "Stata MCP for Positron",
   "description": "Positron-native Stata extension that preserves the upstream stata-mcp server logic while adopting Positron runtime infrastructure.",
   "version": "0.1.0",
   "publisher": "ntluong95",
@@ -80,32 +80,28 @@
       {
         "command": "positronStata.runSelection",
         "category": "Stata",
-        "title": "Run Selection or Current Line",
-        "icon": "$(play)"
+        "title": "Run Selection or Current Line"
       },
       {
         "command": "positronStata.runFile",
         "category": "Stata",
         "title": "Run Current File",
-        "icon": "$(run-all)"
+        "icon": "$(play)"
       },
       {
         "command": "positronStata.stopExecution",
         "category": "Stata",
-        "title": "Stop Execution",
-        "icon": "$(debug-stop)"
+        "title": "Stop Execution"
       },
       {
         "command": "positronStata.viewData",
         "category": "Stata",
-        "title": "View Data",
-        "icon": "$(table)"
+        "title": "View Data"
       },
       {
         "command": "positronStata.restartSession",
         "category": "Stata",
-        "title": "Restart Session",
-        "icon": "$(debug-restart)"
+        "title": "Restart Session"
       },
       {
         "command": "positronStata.testServerConnection",
@@ -126,31 +122,11 @@
           "when": "!virtualWorkspace"
         }
       ],
-      "editor/title": [
-        {
-          "when": "resourceExtname == .do || resourceExtname == .ado || resourceExtname == .doh || resourceExtname == .mata || editorLangId == stata",
-          "command": "positronStata.runSelection",
-          "group": "navigation"
-        },
+      "editor/actions/left": [
         {
           "when": "resourceExtname == .do || resourceExtname == .ado || resourceExtname == .doh || resourceExtname == .mata || editorLangId == stata",
           "command": "positronStata.runFile",
-          "group": "navigation"
-        },
-        {
-          "when": "resourceExtname == .do || resourceExtname == .ado || resourceExtname == .doh || resourceExtname == .mata || editorLangId == stata",
-          "command": "positronStata.stopExecution",
-          "group": "navigation"
-        },
-        {
-          "when": "resourceExtname == .do || resourceExtname == .ado || resourceExtname == .doh || editorLangId == stata",
-          "command": "positronStata.viewData",
-          "group": "navigation"
-        },
-        {
-          "when": "resourceExtname == .do || resourceExtname == .ado || resourceExtname == .doh || resourceExtname == .mata || editorLangId == stata",
-          "command": "positronStata.restartSession",
-          "group": "navigation"
+          "group": "stata@1"
         }
       ],
       "editor/context": [

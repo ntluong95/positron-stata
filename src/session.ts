@@ -130,6 +130,73 @@ function parseChangeDirectoryCommand(code: string): string | null {
   return match[1].trim();
 }
 
+function joinStataLineContinuations(code: string): string {
+  const rawLines = code.split(/\r?\n/);
+  const joinedLines: string[] = [];
+  let currentLine = "";
+
+  for (const rawLine of rawLines) {
+    const stripped = rawLine.replace(/\s+$/, "");
+    if (stripped.endsWith("///")) {
+      currentLine += `${stripped.slice(0, -3).replace(/\s+$/, "")} `;
+      continue;
+    }
+
+    currentLine += rawLine;
+    joinedLines.push(currentLine);
+    currentLine = "";
+  }
+
+  if (currentLine) {
+    joinedLines.push(currentLine);
+  }
+
+  return joinedLines.join("\n");
+}
+
+class SelectionEchoFilter {
+  private readonly _expectedLines: string[];
+  private _index = 0;
+  private _suppressing = true;
+
+  constructor(code: string) {
+    this._expectedLines = joinStataLineContinuations(code)
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+    this._suppressing = this._expectedLines.length > 0;
+  }
+
+  consume(message: string): string | undefined {
+    if (!this._suppressing) {
+      return message;
+    }
+
+    const trimmed = message.trim();
+    if (!trimmed) {
+      return undefined;
+    }
+
+    const match = trimmed.match(/^[.>](?:\s+)?(.*)$/);
+    if (!match) {
+      this._suppressing = false;
+      return message;
+    }
+
+    const expected = this._expectedLines[this._index];
+    if (expected !== undefined && match[1].trim() === expected) {
+      this._index += 1;
+      if (this._index >= this._expectedLines.length) {
+        this._suppressing = false;
+      }
+      return undefined;
+    }
+
+    this._suppressing = false;
+    return message;
+  }
+}
+
 export class StataSession
   implements positron.LanguageRuntimeSession, vscode.Disposable
 {
@@ -544,6 +611,8 @@ export class StataSession
       const configuration = getStataConfiguration();
       const client = await this.ensureClient();
       let fullOutput = "";
+      let userVisibleOutput = "";
+      const echoFilter = new SelectionEchoFilter(code);
       const request = client.runSelectionStream(
         code,
         configuration.runSelectionTimeout,
@@ -551,17 +620,20 @@ export class StataSession
         this._workingDirectory,
         (message) => {
           fullOutput += `${message}\n`;
+          const visibleMessage = echoFilter.consume(message);
           if (
-            isStatusLine(message) ||
-            isGraphMetadataLine(message) ||
+            !visibleMessage ||
+            isStatusLine(visibleMessage) ||
+            isGraphMetadataLine(visibleMessage) ||
             mode === positron.RuntimeCodeExecutionMode.Silent
           ) {
             return;
           }
+          userVisibleOutput += `${visibleMessage}\n`;
           this.emitStream(
             executionId,
-            `${message}\n`,
-            message.startsWith("ERROR:")
+            `${visibleMessage}\n`,
+            visibleMessage.startsWith("ERROR:")
               ? positron.LanguageRuntimeStreamName.Stderr
               : positron.LanguageRuntimeStreamName.Stdout,
           );
@@ -579,7 +651,7 @@ export class StataSession
       }
       await this.emitGraphsIfNeeded(executionId, fullOutput);
 
-      const output = stripGraphMetadata(fullOutput);
+      const output = stripGraphMetadata(userVisibleOutput);
       if (!output && mode !== positron.RuntimeCodeExecutionMode.Silent) {
         this.emitOutput(executionId, "(no output)");
       }
