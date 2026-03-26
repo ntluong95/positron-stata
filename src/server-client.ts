@@ -13,6 +13,7 @@ export interface DataViewResponse {
 	message?: string;
 	data: Array<Array<unknown>>;
 	columns: string[];
+	column_labels?: Record<string, string>;
 	dtypes: Record<string, string>;
 	rows: number;
 	index: number[];

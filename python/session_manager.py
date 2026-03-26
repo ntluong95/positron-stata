@@ -833,6 +833,7 @@ class SessionManager:
                 "status": "success",
                 "data": extra.get('data', []),
                 "columns": extra.get('columns', []),
+                "column_labels": extra.get('column_labels', {}),
                 "dtypes": extra.get('dtypes', {}),
                 "rows": extra.get('rows', 0),
                 "index": extra.get('index', []),

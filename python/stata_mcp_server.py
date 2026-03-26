@@ -4276,6 +4276,7 @@ async def view_data_endpoint(if_condition: str = None, session_id: str = None, m
                     "status": "success",
                     "data": result.get('data', []),
                     "columns": result.get('columns', []),
+                    "column_labels": result.get('column_labels', {}),
                     "dtypes": result.get('dtypes', {}),
                     "rows": result.get('rows', 0),
                     "index": result.get('index', []),
@@ -4311,6 +4312,7 @@ async def view_data_endpoint(if_condition: str = None, session_id: str = None, m
                     "message": "No data currently loaded",
                     "data": [],
                     "columns": [],
+                    "column_labels": {},
                     "rows": 0,
                     "total_rows": 0,
                     "displayed_rows": 0
@@ -4405,6 +4407,7 @@ async def view_data_endpoint(if_condition: str = None, session_id: str = None, m
                     "message": "No data matches the condition" if if_condition else "No data loaded",
                     "data": [],
                     "columns": [],
+                    "column_labels": {},
                     "rows": 0,
                     "total_rows": total_matching,
                     "displayed_rows": 0
@@ -4423,6 +4426,12 @@ async def view_data_endpoint(if_condition: str = None, session_id: str = None, m
         # Convert to list of lists for better performance
         data_values = df_clean.values.tolist()
         column_names = df_clean.columns.tolist()
+        column_labels = {}
+        for column_name in column_names:
+            try:
+                column_labels[column_name] = sfi.Data.getVarLabel(column_name) or ""
+            except Exception:
+                column_labels[column_name] = ""
 
         # Get data types for each column
         dtypes = {col: str(df[col].dtype) for col in df.columns}
@@ -4432,6 +4441,7 @@ async def view_data_endpoint(if_condition: str = None, session_id: str = None, m
                 "status": "success",
                 "data": data_values,
                 "columns": column_names,
+                "column_labels": column_labels,
                 "dtypes": dtypes,
                 "rows": int(rows),
                 "total_rows": int(total_matching),

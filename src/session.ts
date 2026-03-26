@@ -22,7 +22,6 @@ import {
   isGraphMetadataLine,
   isStatusLine,
   parseGraphsFromOutput,
-  stripGraphMetadata,
 } from "./stata-output";
 import { StataInstallation } from "./stata-installation";
 import { StataDataExplorer } from "./data-explorer";
@@ -154,6 +153,34 @@ function joinStataLineContinuations(code: string): string {
   return joinedLines.join("\n");
 }
 
+function containsGraphCommand(code: string): boolean {
+  return joinStataLineContinuations(code)
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .some((line) => {
+      if (!line || line.startsWith("*") || line.startsWith("//")) {
+        return false;
+      }
+
+      const normalized = line.replace(/^\.\s*/, "").toLowerCase();
+      if (
+        /^graph\s+(export|save|describe|dir|drop|rename|display|query|set|use)\b/.test(
+          normalized,
+        )
+      ) {
+        return false;
+      }
+
+      return /^(scatter|histogram|hist|kdensity|twoway|tw|graph\s+(bar|box|pie|dot|hbar|combine|matrix|twoway)|coefplot|binscatter|marginsplot|sts\s+graph|stcurve|qnorm|pnorm|qqplot|gladder|lowess|lpoly)\b/.test(
+        normalized,
+      );
+    });
+}
+
+function isGraphEchoLine(message: string): boolean {
+  return /^[A-Za-z_][A-Za-z0-9_]*$/.test(message.trim());
+}
+
 class SelectionEchoFilter {
   private readonly _expectedLines: string[];
   private _index = 0;
@@ -281,6 +308,9 @@ export class StataSession
     const executionId = randomUUID();
     const configuration = getStataConfiguration();
     const client = await this.ensureClient();
+    const suppressGraphEcho =
+      getStataConfiguration().autoDisplayGraphs &&
+      this.fileContainsGraphCommand(filePath);
     const workingDirectory = getWorkingDirectoryForFile(
       filePath,
       this._extensionPath,
@@ -303,7 +333,8 @@ export class StataSession
           if (
             !isStatusLine(message) &&
             !isGraphMetadataLine(message) &&
-            message.trim().length > 0
+            message.trim().length > 0 &&
+            !(suppressGraphEcho && isGraphEchoLine(message))
           ) {
             this.emitStream(
               executionId,
@@ -322,13 +353,6 @@ export class StataSession
         workingDirectoryChanged = true;
       }
       await this.emitGraphsIfNeeded(executionId, fullOutput);
-      const output = stripGraphMetadata(fullOutput);
-      if (!output) {
-        this.emitOutput(
-          executionId,
-          `Completed ${vscode.workspace.asRelativePath(filePath, false)} with no textual output.`,
-        );
-      }
     } catch (error) {
       if (isStreamAbortError(error)) {
         this.emitStream(
@@ -610,8 +634,9 @@ export class StataSession
 
       const configuration = getStataConfiguration();
       const client = await this.ensureClient();
+      const suppressGraphEcho =
+        configuration.autoDisplayGraphs && containsGraphCommand(code);
       let fullOutput = "";
-      let userVisibleOutput = "";
       const echoFilter = new SelectionEchoFilter(code);
       const request = client.runSelectionStream(
         code,
@@ -625,11 +650,11 @@ export class StataSession
             !visibleMessage ||
             isStatusLine(visibleMessage) ||
             isGraphMetadataLine(visibleMessage) ||
+            (suppressGraphEcho && isGraphEchoLine(visibleMessage)) ||
             mode === positron.RuntimeCodeExecutionMode.Silent
           ) {
             return;
           }
-          userVisibleOutput += `${visibleMessage}\n`;
           this.emitStream(
             executionId,
             `${visibleMessage}\n`,
@@ -650,11 +675,6 @@ export class StataSession
         workingDirectoryChanged = true;
       }
       await this.emitGraphsIfNeeded(executionId, fullOutput);
-
-      const output = stripGraphMetadata(userVisibleOutput);
-      if (!output && mode !== positron.RuntimeCodeExecutionMode.Silent) {
-        this.emitOutput(executionId, "(no output)");
-      }
     } catch (error) {
       if (isStreamAbortError(error)) {
         this.emitStream(
@@ -1348,6 +1368,14 @@ export class StataSession
     }
   }
 
+  private fileContainsGraphCommand(filePath: string): boolean {
+    try {
+      return containsGraphCommand(fs.readFileSync(filePath, "utf8"));
+    } catch {
+      return false;
+    }
+  }
+
   private async emitGraph(
     parentId: string,
     graph: GraphDescriptor,
@@ -1364,10 +1392,11 @@ export class StataSession
       when: new Date().toISOString(),
       type: positron.LanguageRuntimeMessageType.Output,
       data: {
-        "text/plain": graph.name,
         "image/png": encoded,
       },
-    } as positron.LanguageRuntimeOutput);
+      output_location: positron.PositronOutputLocation.Plot,
+      resource_roots: [],
+    } as positron.LanguageRuntimeWebOutput);
   }
 
   private async showHelpInternal(

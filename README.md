@@ -2,15 +2,49 @@
 
 `positron-stata` is a Positron-native Stata extension that preserves the proven Python MCP and session logic from [`hanlulong/stata-mcp`](https://github.com/hanlulong/stata-mcp) while replacing the outer extension shell with the runtime/session architecture compatible with Positron IDE.
 
-## Positron Features
+## Key Features
 
-- Discover or configure a local Stata installation and expose it as a Positron language runtime
-- Run the current selection or current line in the Positron console
-- Run the current `.do`, `.ado`, `.doh`, or `.mata` file through the preserved streaming server
-- Restart or stop a Stata session without restarting the IDE
-- Render Stata help topics in the Positron Help pane
-- Render `browse` output in the Positron's interactive Data Explorer
-- Surface exported graphs in Positron's Plots pane when `positron.stata.autoDisplayGraphs` is enabled
+### Console
+
+![Console pane](resources/console.png)
+
+Interactive Stata console backed by the MCP server, showing session startup and the prompt for running commands.
+
+### Data Explorer
+
+![Data Explorer](resources/data_explorer.png)
+
+Interactive data viewer showing variables, brief summaries and a spreadsheet-like table for `browse` output. It also support display variable label as a tooltip, summary statistics and filtering data
+
+### DO-file Editor & Syntax
+
+![DO-file syntax highlighting](resources/dofile_syntax.png)
+
+Stata `.do` file editor with syntax highlighting, inline execution controls, and integrated results.
+
+### Environment & Plots
+
+![Environment and plot panes](resources/environment_and_plot.png)
+
+Session variables and Plots pane — exported Stata graphs render directly inside Positron.
+
+### Help Pane
+
+![Help pane](resources/help_pane.png)
+
+Rendered Stata help topics with syntax, options and examples available inline in the Help pane.
+
+### History
+
+![History pane](resources/history_pane.png)
+
+Command history panel that preserves executed commands and can re-run or send commands back to the console.
+
+### Inline Output (Quarto)
+
+![Inline output in QMD](resources/inline_ouput_qmd.png)
+
+Preview of Stata output embedded inline in Quarto (.qmd) documents — rendered code results and plots appear directly alongside narrative text.
 
 ## Requirements
 
@@ -54,7 +88,6 @@ The extension uses the `positron.stata.*` namespace:
 - `positron.stata.multiSession.maxSessions`
 - `positron.stata.multiSession.sessionTimeout`
 - `positron.stata.dataViewer.maxRows`
-
 
 ## Attribution And Licensing
 

@@ -870,6 +870,7 @@ capture log close _all
                                     extra={
                                         "data": [],
                                         "columns": [],
+                                        "column_labels": {},
                                         "dtypes": {},
                                         "rows": 0,
                                         "index": [],
@@ -949,6 +950,7 @@ capture log close _all
                                     extra={
                                         "data": [],
                                         "columns": [],
+                                        "column_labels": {},
                                         "dtypes": {},
                                         "rows": 0,
                                         "index": [],
@@ -960,6 +962,13 @@ capture log close _all
                             else:
                                 # Clean data for JSON serialization
                                 df_clean = df.replace({np.nan: None})
+                                column_names = df_clean.columns.tolist()
+                                column_labels = {}
+                                for column_name in column_names:
+                                    try:
+                                        column_labels[column_name] = sfi.Data.getVarLabel(column_name) or ""
+                                    except Exception:
+                                        column_labels[column_name] = ""
 
                                 send_result(
                                     command_id=cmd_id,
@@ -967,7 +976,8 @@ capture log close _all
                                     output="",
                                     extra={
                                         "data": df_clean.values.tolist(),
-                                        "columns": df_clean.columns.tolist(),
+                                        "columns": column_names,
+                                        "column_labels": column_labels,
                                         "dtypes": {col: str(df[col].dtype) for col in df.columns},
                                         "rows": len(df),
                                         "index": orig_obs_index,

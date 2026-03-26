@@ -29,6 +29,7 @@ interface TableShape {
 
 interface ColumnSchema {
   column_name: string;
+  column_label?: string;
   column_index: number;
   type_name: string;
   type_display: ColumnDisplayType;
@@ -656,12 +657,14 @@ export class StataDataExplorer {
   private buildSchemas(): ColumnSchema[] {
     return this._data.columns.map((column, index) => {
       const dtype = this._data.dtypes[column] || "unknown";
+      const columnLabel = this._data.column_labels?.[column]?.trim() || undefined;
       return {
         column_name: column,
+        column_label: columnLabel,
         column_index: index,
         type_name: dtype,
         type_display: this.mapDtypeToDisplay(dtype),
-        description: "",
+        description: columnLabel ?? "",
       };
     });
   }
