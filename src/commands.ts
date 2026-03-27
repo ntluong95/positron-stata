@@ -6,6 +6,7 @@ import { getWorkingDirectoryForFile } from './configuration';
 import { StataRuntimeManager } from './runtime-manager';
 import { StataServerManager } from './server-manager';
 import { StataSession } from './session';
+import { getStataSectionRange } from './stata-sections';
 import { getNextStataExecutablePosition, getStataBlockBounds } from './stata-selection';
 import { StataVariableManager } from './variable-manager';
 
@@ -86,6 +87,28 @@ function getSelectionOrCurrentCommand(editor: vscode.TextEditor, lines: readonly
 	};
 }
 
+function getSelectionOrCurrentSection(editor: vscode.TextEditor, lines: readonly string[]): EditorCommandTarget {
+	if (!editor.selection.isEmpty) {
+		return {
+			code: editor.document.getText(editor.selection),
+			endLine: getSelectionEndLine(editor.selection),
+		};
+	}
+
+	const activeLine = editor.selection.active.line;
+	const sectionRange = getStataSectionRange(lines, activeLine);
+	if (!sectionRange) {
+		return getSelectionOrCurrentCommand(editor, lines);
+	}
+
+	const start = new vscode.Position(sectionRange.startLine, 0);
+	const end = editor.document.lineAt(sectionRange.endLine).range.end;
+	return {
+		code: editor.document.getText(new vscode.Range(start, end)),
+		endLine: sectionRange.endLine,
+	};
+}
+
 function moveCursor(editor: vscode.TextEditor, lineNumber: number, character: number): void {
 	const position = new vscode.Position(lineNumber, character);
 	editor.selection = new vscode.Selection(position, position);
@@ -116,9 +139,10 @@ async function executeEditorCommand(
 	context: vscode.ExtensionContext,
 	runtimeManager: StataRuntimeManager,
 	advanceToNextBlock: boolean,
+	targetResolver: (editor: vscode.TextEditor, lines: readonly string[]) => EditorCommandTarget = getSelectionOrCurrentCommand,
 ): Promise<void> {
 	const lines = getDocumentLines(editor.document);
-	const commandTarget = getSelectionOrCurrentCommand(editor, lines);
+	const commandTarget = targetResolver(editor, lines);
 	const code = commandTarget.code.trim();
 	if (!code) {
 		return;
@@ -187,6 +211,18 @@ export function registerCommands(
 			}
 
 			await executeEditorCommand(editor, context, runtimeManager, true);
+		}),
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand('positronStata.runSection', async () => {
+			const editor = vscode.window.activeTextEditor;
+			if (!isStataEditor(editor)) {
+				vscode.window.showWarningMessage('Open a Stata source file to run code.');
+				return;
+			}
+
+			await executeEditorCommand(editor, context, runtimeManager, false, getSelectionOrCurrentSection);
 		}),
 	);
 

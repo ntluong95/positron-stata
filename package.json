@@ -2,7 +2,7 @@
   "name": "positron-stata",
   "displayName": "Stata for Positron",
   "description": "Positron-native Stata extension that preserves the upstream stata-mcp server logic while adopting Positron runtime infrastructure.",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "publisher": "ntluong95",
   "private": false,
   "repository": {
@@ -36,6 +36,7 @@
     "onCommand:positronStata.createNewFile",
     "onCommand:positronStata.runSelection",
     "onCommand:positronStata.runSelectionAndAdvance",
+    "onCommand:positronStata.runSection",
     "onCommand:positronStata.runFile",
     "onCommand:positronStata.stopExecution",
     "onCommand:positronStata.viewData",
@@ -95,6 +96,11 @@
         "command": "positronStata.runSelectionAndAdvance",
         "category": "Stata",
         "title": "Run Current Line or Selection"
+      },
+      {
+        "command": "positronStata.runSection",
+        "category": "Stata",
+        "title": "Run Section"
       },
       {
         "command": "positronStata.runFile",
@@ -159,6 +165,12 @@
           "when": "resourceExtname == .do || resourceExtname == .ado || resourceExtname == .doh || resourceExtname == .mata || editorLangId == stata",
           "command": "positronStata.runFile",
           "group": "navigation",
+          "order": 2
+        },
+        {
+          "when": "resourceExtname == .do || resourceExtname == .ado || resourceExtname == .doh || resourceExtname == .mata || editorLangId == stata",
+          "command": "positronStata.runSection",
+          "group": "navigation",
           "order": 1
         }
       ],
@@ -171,6 +183,11 @@
         {
           "when": "resourceExtname == .do || resourceExtname == .ado || resourceExtname == .doh || resourceExtname == .mata || editorLangId == stata",
           "command": "positronStata.runFile",
+          "group": "1_stata"
+        },
+        {
+          "when": "resourceExtname == .do || resourceExtname == .ado || resourceExtname == .doh || resourceExtname == .mata || editorLangId == stata",
+          "command": "positronStata.runSection",
           "group": "1_stata"
         },
         {
@@ -212,6 +229,12 @@
         "command": "positronStata.runFile",
         "key": "ctrl+shift+d",
         "mac": "cmd+shift+d",
+        "when": "editorTextFocus && (editorLangId == stata || resourceExtname == .do || resourceExtname == .ado || resourceExtname == .doh || resourceExtname == .mata)"
+      },
+      {
+        "command": "positronStata.runSection",
+        "key": "ctrl+d",
+        "mac": "cmd+d",
         "when": "editorTextFocus && (editorLangId == stata || resourceExtname == .do || resourceExtname == .ado || resourceExtname == .doh || resourceExtname == .mata)"
       },
       {
@@ -350,6 +373,11 @@
           "default": 30,
           "minimum": 5,
           "description": "Interval in seconds for timed autocomplete variable refresh when enabled."
+        },
+        "positron.stata.outline.numberingShow": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show hierarchical numbering in the Stata outline for section headers written as ** # through ** ######."
         }
       }
     },
