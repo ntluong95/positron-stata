@@ -18,3 +18,5 @@ example.qmd
 example.do
 TODO.md
 syntaxes/stata.json
+syntaxes/ssc_contributed_commands.yaml
+syntaxes/official_stata_commands.yaml

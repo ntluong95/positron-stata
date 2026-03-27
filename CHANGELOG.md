@@ -2,10 +2,16 @@
 
 All notable changes to `positron-stata` are documented in this file.
 
+## 0.0.6
+
+- Added official Stata command highlighting with abbreviation support via dedicated `official-commands` patterns
+- Added SSC community command highlighting via dedicated `community-commands` patterns
+- Added Mata block and inline highlighting with expanded Mata internals and common Mata function scopes
+
 ## 0.0.5
 
-- Added an editor title run dropdown with Run Selection, Run Selection and Advance, and Run Current File actions
-- Made Run Selection or Current Line and Advance the primary play button action with Ctrl/Cmd+Enter
+- Added an editor title run dropdown with Run Selection, and Run Current File actions
+- Made Run Selection or Current Line the primary play button action with Ctrl/Cmd+Enter
 
 ## 0.0.4
 
