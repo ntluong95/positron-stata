@@ -2,6 +2,10 @@
 
 All notable changes to `positron-stata` are documented in this file.
 
+## 0.0.8
+
+- Fix comments not displaying in the Outline view
+
 ## 0.0.7
 
 - Add a completion provider for variables of the current active dataset

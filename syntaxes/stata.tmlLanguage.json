@@ -235,7 +235,7 @@
           "name": "keyword.operator.logical.stata"
         },
         {
-          "match": "(?:<=|>=|:=|==|!=|~=|<|>|=|!)",
+          "match": "(?:<=|>=|:=|==|!=|~=|<|>|=|!!|!)",
           "name": "keyword.operator.comparison.stata"
         },
         {
@@ -345,7 +345,7 @@
           "name": "constant.language.missing.stata"
         },
         {
-          "match": "\\b(_pi|_rc|_merge|_N|_n|_all|_col|_skip|_dta)\\b",
+          "match": "\\b(_pi|_rc|_merge|_N|_n|_all|_col|_skip|_dta|_b|_coef|_cons|_se|_pred)\\b",
           "name": "constant.language.builtin.stata"
         }
       ]
@@ -846,11 +846,7 @@
       ]
     }
   },
-  "fileTypes": [
-    "do",
-    "ado",
-    "mata"
-  ],
+  "fileTypes": ["do", "ado", "mata"],
   "foldingStartMarker": "\\{\\s*$",
   "foldingStopMarker": "^\\s*\\}"
 }
