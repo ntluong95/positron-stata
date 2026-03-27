@@ -59,6 +59,17 @@ function buildQueryString(query: Record<string, string | number | undefined> = {
 	return serialized ? `?${serialized}` : '';
 }
 
+function parseSseDataLine(line: string): string | undefined {
+	if (!line.startsWith('data:')) {
+		return undefined;
+	}
+
+	const rawData = line.slice(5);
+	// SSE allows exactly one optional space after "data:".
+	// Preserve any additional leading spaces to keep table alignment.
+	return rawData.startsWith(' ') ? rawData.slice(1) : rawData;
+}
+
 function collectResponse(response: http.IncomingMessage): Promise<string> {
 	return new Promise((resolve, reject) => {
 		let body = '';
@@ -230,11 +241,8 @@ export class StataServerClient {
 					buffer = events.pop() || '';
 					for (const event of events) {
 						for (const line of event.split('\n')) {
-							if (!line.startsWith('data:')) {
-								continue;
-							}
-							const data = line.slice(5).trimStart();
-							if (data.length > 0) {
+							const data = parseSseDataLine(line);
+							if (data && data.length > 0) {
 								options.onMessage(data);
 							}
 						}

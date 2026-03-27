@@ -1,0 +1,143 @@
+{
+  "foreach": {
+    "prefix": "foreach",
+    "body": [
+      "foreach ${1:var} of ${2|local,varlist,global,numlist|} ${3:list} {",
+      "\t${0}",
+      "}"
+    ],
+    "description": "foreach loop"
+  },
+  "forvalues": {
+    "prefix": "forvalues",
+    "body": ["forvalues ${1:i} = ${2:1}/${3:10} {", "\t${0}", "}"],
+    "description": "forvalues numeric loop"
+  },
+  "program": {
+    "prefix": "program",
+    "body": [
+      "capture program drop ${1:myprogram}",
+      "program define ${1:myprogram}",
+      "\tsyntax ${2:varlist} [if] [in]",
+      "\t${0}",
+      "end"
+    ],
+    "description": "Define a Stata program"
+  },
+  "if-else": {
+    "prefix": "ifelse",
+    "body": ["if ${1:condition} {", "\t${2}", "}", "else {", "\t${0}", "}"],
+    "description": "if/else block"
+  },
+  "preserve-restore": {
+    "prefix": "preserve",
+    "body": ["preserve", "${0}", "restore"],
+    "description": "preserve/restore block"
+  },
+  "tempfile": {
+    "prefix": "tempfile",
+    "body": [
+      "tempfile ${1:tmp}",
+      "save \"`${1:tmp}'\", replace",
+      "${0}",
+      "use \"`${1:tmp}'\", clear"
+    ],
+    "description": "Temporary file pattern"
+  },
+  "regress-robust": {
+    "prefix": "reg robust",
+    "body": ["reg ${1:depvar} ${2:indepvars}, robust"],
+    "description": "OLS regression with robust standard errors"
+  },
+  "reghdfe": {
+    "prefix": "reghdfe",
+    "body": [
+      "reghdfe ${1:depvar} ${2:indepvars}, absorb(${3:fe_vars}) vce(cluster ${4:cluster_var})"
+    ],
+    "description": "Fixed effects regression (reghdfe)"
+  },
+  "eststo-esttab": {
+    "prefix": "esttab",
+    "body": [
+      "eststo clear",
+      "eststo: reg ${1:depvar} ${2:vars1}",
+      "eststo: reg ${1:depvar} ${3:vars2}",
+      "esttab, se star(* 0.10 ** 0.05 *** 0.01) ${0}"
+    ],
+    "description": "Estimation table workflow"
+  },
+  "merge": {
+    "prefix": "merge",
+    "body": [
+      "merge ${1|1:1,m:1,1:m,m:m|} ${2:key_vars} using \"${3:filename}\""
+    ],
+    "description": "Merge datasets"
+  },
+  "collapse": {
+    "prefix": "collapse",
+    "body": [
+      "collapse (${1|mean,sum,count,min,max,median,sd|}) ${2:vars}, by(${3:group_vars})"
+    ],
+    "description": "Collapse data to summary statistics"
+  },
+  "label-variable": {
+    "prefix": "label var",
+    "body": ["label variable ${1:varname} \"${2:Variable Label}\""],
+    "description": "Label a variable"
+  },
+  "label-define": {
+    "prefix": "label define",
+    "body": [
+      "label define ${1:lblname} ${2:0} \"${3:No}\" ${4:1} \"${5:Yes}\"",
+      "label values ${6:varname} ${1:lblname}"
+    ],
+    "description": "Define and apply value labels"
+  },
+  "graph-twoway": {
+    "prefix": "twoway",
+    "body": [
+      "twoway (${1|scatter,line,connected,area,bar,rarea|} ${2:yvar} ${3:xvar}), ///",
+      "\txtitle(\"${4}\") ytitle(\"${5}\") ///",
+      "\ttitle(\"${6}\") ///",
+      "\tlegend(${7:off}) graphregion(color(white))"
+    ],
+    "description": "Two-way graph"
+  },
+  "dofile-header": {
+    "prefix": "header",
+    "body": [
+      "/*******************************************************************************",
+      " * ${1:Project Title}",
+      " * Author: ${2:Name}",
+      " * Date: ${CURRENT_YEAR}-${CURRENT_MONTH}-${CURRENT_DATE}",
+      " * Description: ${3:Brief description}",
+      " *******************************************************************************/",
+      "",
+      "clear all",
+      "set more off",
+      "",
+      "* Paths",
+      "global root \"${4:~/project}\"",
+      "global data  \"\\$root/data\"",
+      "global output \"\\$root/output\"",
+      "",
+      "${0}"
+    ],
+    "description": "Do-file header template"
+  },
+  "quietly": {
+    "prefix": "quietly",
+    "body": ["quietly {", "\t${0}", "}"],
+    "description": "Quietly block"
+  },
+  "capture": {
+    "prefix": "capture",
+    "body": ["capture {", "\t${0}", "}"],
+    "description": "Capture block"
+  },
+  "log": {
+    "prefix": "log using",
+    "body": ["log using \"${1:logfile}\", replace", "${0}", "log close"],
+    "description": "Log using/close block"
+  }
+}

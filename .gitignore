@@ -15,3 +15,5 @@ build.md
 MIGRATION.md
 .vscodeignore
 example.qmd
+example.do
+TODO.md

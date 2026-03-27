@@ -2,8 +2,11 @@ import * as vscode from 'vscode';
 import * as positron from 'positron';
 
 import { registerCommands } from './commands';
+import { StataCompletionProvider } from './completionProvider';
 import { getStataConfiguration } from './configuration';
 import { registerHelpTopicProvider } from './help';
+import { StataHoverProvider } from './hoverProvider';
+import { StataOutlineProvider } from './outlineProvider';
 import { StataRuntimeManager } from './runtime-manager';
 import { StataServerManager } from './server-manager';
 
@@ -12,6 +15,16 @@ export const LOGGER = vscode.window.createOutputChannel('Positron Stata MCP', { 
 let serverManager: StataServerManager | undefined;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
+	const stataDocumentSelector: vscode.DocumentSelector = [
+		{ language: 'stata', scheme: 'file' },
+		{ language: 'stata', scheme: 'untitled' },
+	];
+
+	const completionTriggers = [
+		...'abcdefghijklmnopqrstuvwxyz',
+		...'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+	];
+
 	const onDidChangeLogLevel = (logLevel: vscode.LogLevel) => {
 		LOGGER.appendLine(`Log level: ${vscode.LogLevel[logLevel]}`);
 	};
@@ -25,6 +38,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 	context.subscriptions.push(
 		serverManager,
 		positron.runtime.registerLanguageRuntimeManager('stata', runtimeManager),
+		vscode.languages.registerCompletionItemProvider(
+			stataDocumentSelector,
+			new StataCompletionProvider(),
+			...completionTriggers,
+		),
+		vscode.languages.registerHoverProvider(stataDocumentSelector, new StataHoverProvider()),
+		vscode.languages.registerDocumentSymbolProvider(stataDocumentSelector, new StataOutlineProvider()),
 		registerHelpTopicProvider(),
 	);
 
