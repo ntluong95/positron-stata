@@ -2,7 +2,7 @@
   "name": "positron-stata",
   "displayName": "Stata for Positron",
   "description": "Positron-native Stata extension that preserves the upstream stata-mcp server logic while adopting Positron runtime infrastructure.",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "publisher": "ntluong95",
   "private": false,
   "repository": {
@@ -92,7 +92,7 @@
       {
         "command": "positronStata.runSelectionAndAdvance",
         "category": "Stata",
-        "title": "Run Selection or Current Line and Advance"
+        "title": "Run Current Line or Selection"
       },
       {
         "command": "positronStata.runFile",
@@ -134,11 +134,19 @@
           "when": "!virtualWorkspace"
         }
       ],
-      "editor/actions/left": [
+      "editor/title/run": [
+        {
+          "when": "resourceExtname == .do || resourceExtname == .ado || resourceExtname == .doh || resourceExtname == .mata || editorLangId == stata",
+          "command": "positronStata.runSelectionAndAdvance",
+          "group": "navigation",
+          "order": 0,
+          "icon": "$(play)"
+        },
         {
           "when": "resourceExtname == .do || resourceExtname == .ado || resourceExtname == .doh || resourceExtname == .mata || editorLangId == stata",
           "command": "positronStata.runFile",
-          "group": "stata@1"
+          "group": "navigation",
+          "order": 1
         }
       ],
       "editor/context": [
