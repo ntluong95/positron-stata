@@ -69,7 +69,7 @@
       {
         "language": "stata",
         "scopeName": "source.stata",
-        "path": "./syntaxes/stata.tmLanguage.json"
+        "path": "./syntaxes/stata.tmlLanguage.json"
       }
     ],
     "snippets": [
