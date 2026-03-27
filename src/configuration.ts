@@ -27,6 +27,7 @@ export interface StataConfiguration {
 	autocompleteRefreshAfterRun: boolean;
 	autocompleteVariableRefreshEnabled: boolean;
 	autocompleteVariableRefreshIntervalSeconds: number;
+	outlineNumberingShow: boolean;
 }
 
 function normalizePath(value: string): string {
@@ -71,6 +72,7 @@ export function getStataConfiguration(): StataConfiguration {
 			5,
 			asPositiveInteger(config.get<number>('autocomplete.variableRefresh.intervalSeconds', 30), 30),
 		),
+		outlineNumberingShow: config.get<boolean>('outline.numberingShow', false) === true,
 	};
 }
 

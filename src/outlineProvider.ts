@@ -1,101 +1,186 @@
 import * as vscode from 'vscode';
+import { getStataConfiguration } from './configuration';
+import {
+    collectStataSectionHeaders,
+    getStataSectionEndLine,
+    type StataSectionHeader,
+} from './stata-sections';
+
+interface OutlineStackItem {
+    level: number;
+    symbol: vscode.DocumentSymbol;
+}
+
+function updateSectionCounters(counters: number[], level: number): string {
+    while (counters.length < level) {
+        counters.push(0);
+    }
+
+    counters[level - 1] += 1;
+
+    for (let index = level; index < counters.length; index += 1) {
+        counters[index] = 0;
+    }
+
+    return counters.slice(0, level).join('.');
+}
 
 export class StataOutlineProvider implements vscode.DocumentSymbolProvider {
     provideDocumentSymbols(
         document: vscode.TextDocument,
     ): vscode.DocumentSymbol[] {
-        const symbols: vscode.DocumentSymbol[] = [];
+        const lines = Array.from({ length: document.lineCount }, (_, lineNumber) => document.lineAt(lineNumber).text);
+        const headers = collectStataSectionHeaders(lines);
+        const numberingEnabled = getStataConfiguration().outlineNumberingShow;
+        const rootSymbols: vscode.DocumentSymbol[] = [];
+        const stack: OutlineStackItem[] = [];
+        const sectionCounters: number[] = [];
+        const headerByLine = new Map<number, { header: StataSectionHeader; symbol: vscode.DocumentSymbol }>();
 
-        for (let i = 0; i < document.lineCount; i++) {
-            const line = document.lineAt(i);
-            const text = line.text;
-            const trimmed = text.trim();
+        for (let index = 0; index < headers.length; index += 1) {
+            const header = headers[index];
+            const startLine = header.lineNumber;
+            const endLine = getStataSectionEndLine(headers, index, document.lineCount - 1);
+            const endCharacter = document.lineAt(Math.max(endLine, startLine)).range.end.character;
+            const displayNumbering = numberingEnabled ? `${updateSectionCounters(sectionCounters, header.level)} ` : '';
+            const titleRange = document.lineAt(startLine).range;
+            const fullRange = new vscode.Range(startLine, 0, Math.max(endLine, startLine), endCharacter);
 
-            // Program definitions: "program define name" or "program name"
-            const progMatch = trimmed.match(/^program\s+(?:define\s+)?(\w+)/i);
-            if (progMatch) {
-                const name = progMatch[1];
-                if (/^(drop|dir|list|define)$/i.test(name)) {
-                    if (!/^program\s+define\s+/i.test(trimmed)) {
-                        continue;
-                    }
-                }
-                symbols.push(new vscode.DocumentSymbol(
-                    name, 'program', vscode.SymbolKind.Function,
-                    line.range, line.range,
-                ));
+            const symbol = new vscode.DocumentSymbol(
+                `${displayNumbering}${header.title}`,
+                'section',
+                vscode.SymbolKind.Module,
+                fullRange,
+                titleRange,
+            );
+
+            while (stack.length > 0 && stack[stack.length - 1].level >= header.level) {
+                stack.pop();
+            }
+
+            if (stack.length > 0) {
+                stack[stack.length - 1].symbol.children.push(symbol);
+            } else {
+                rootSymbols.push(symbol);
+            }
+
+            stack.push({ level: header.level, symbol });
+            headerByLine.set(startLine, { header, symbol });
+        }
+
+        for (let lineNumber = 0; lineNumber < document.lineCount; lineNumber += 1) {
+            if (headerByLine.has(lineNumber)) {
                 continue;
             }
 
-            // Section headers: comment lines with actual title text.
-            // Pattern: look for a comment line that contains words (not just dashes/stars/equals).
-            // The title is on the NEXT or PREVIOUS line if this is a separator.
-            // Common Stata patterns:
-            //   * --- Title ---
-            //   * === Title ===
-            //   * Title
-            //   * 1. Title
-            // Skip pure separator lines: * -------, * =======, * *******
+            const line = document.lineAt(lineNumber);
+            const trimmed = line.text.trim();
+
             if (/^\*/.test(trimmed)) {
                 const commentBody = trimmed.replace(/^\*\s*/, '').trim();
 
-                // Skip pure separator lines (only dashes, equals, stars, spaces, pipes)
                 if (!commentBody || /^[-=*|_~#+\s]+$/.test(commentBody)) {
                     continue;
                 }
 
-                // Skip very short comments (less than 3 chars of actual text)
                 const textOnly = commentBody.replace(/[-=*|_~#+\s]/g, '');
                 if (textOnly.length < 3) {
                     continue;
                 }
 
-                // Detect numbered sections: "1. Title" or "Section Title"
-                // Only show if it looks like a section header (has a number prefix,
-                // or is between separator lines, or is ALL CAPS, or starts with a keyword)
                 const isNumbered = /^\d+[\.\)]\s+/.test(commentBody);
                 const isAllCaps = textOnly === textOnly.toUpperCase() && textOnly.length > 3;
-                const hasSeparatorContext = this.hasSeparatorNeighbor(document, i);
+                const hasSeparatorContext = this.hasSeparatorNeighbor(document, lineNumber);
 
                 if (isNumbered || isAllCaps || hasSeparatorContext) {
-                    // Clean up the title: remove trailing separator chars
                     const title = commentBody
                         .replace(/^[-=*\s]+/, '')
                         .replace(/[-=*\s]+$/, '')
                         .trim();
 
                     if (title.length >= 3) {
-                        symbols.push(new vscode.DocumentSymbol(
-                            title, 'section', vscode.SymbolKind.Module,
-                            line.range, line.range,
-                        ));
+                        const symbol = new vscode.DocumentSymbol(
+                            title,
+                            'section',
+                            vscode.SymbolKind.Module,
+                            line.range,
+                            line.range,
+                        );
+                        this.appendToCurrentSection(rootSymbols, headerByLine, headers, lineNumber, symbol);
                     }
                 }
                 continue;
             }
 
-            // Loops: foreach ... { and forvalues ... {
+            const progMatch = trimmed.match(/^program\s+(?:define\s+)?(\w+)/i);
+            if (progMatch) {
+                const name = progMatch[1];
+                if (/^(drop|dir|list|define)$/i.test(name) && !/^program\s+define\s+/i.test(trimmed)) {
+                    continue;
+                }
+
+                const symbol = new vscode.DocumentSymbol(
+                    name,
+                    'program',
+                    vscode.SymbolKind.Function,
+                    line.range,
+                    line.range,
+                );
+                this.appendToCurrentSection(rootSymbols, headerByLine, headers, lineNumber, symbol);
+                continue;
+            }
+
             const loopMatch = trimmed.match(/^(foreach|forvalues)\s+(.+?)\s*\{/i);
             if (loopMatch) {
-                symbols.push(new vscode.DocumentSymbol(
-                    `${loopMatch[1]} ${loopMatch[2].trim()}`, 'loop',
+                const symbol = new vscode.DocumentSymbol(
+                    `${loopMatch[1]} ${loopMatch[2].trim()}`,
+                    'loop',
                     vscode.SymbolKind.Variable,
-                    line.range, line.range,
-                ));
-                continue;
+                    line.range,
+                    line.range,
+                );
+                this.appendToCurrentSection(rootSymbols, headerByLine, headers, lineNumber, symbol);
             }
         }
 
-        return symbols;
+        return rootSymbols;
     }
 
-    /** Check if the line above or below is a separator (--- or === or ***) */
+    private appendToCurrentSection(
+        rootSymbols: vscode.DocumentSymbol[],
+        headerByLine: Map<number, { header: StataSectionHeader; symbol: vscode.DocumentSymbol }>,
+        headers: readonly StataSectionHeader[],
+        lineNumber: number,
+        symbol: vscode.DocumentSymbol,
+    ): void {
+        for (let index = headers.length - 1; index >= 0; index -= 1) {
+            const header = headers[index];
+            if (header.lineNumber > lineNumber) {
+                continue;
+            }
+
+            const endLine = getStataSectionEndLine(headers, index, Number.MAX_SAFE_INTEGER);
+            if (lineNumber <= endLine) {
+                const parent = headerByLine.get(header.lineNumber);
+                if (parent) {
+                    parent.symbol.children.push(symbol);
+                    return;
+                }
+            }
+        }
+
+        rootSymbols.push(symbol);
+    }
+
     private hasSeparatorNeighbor(doc: vscode.TextDocument, lineNum: number): boolean {
         const check = (n: number) => {
-            if (n < 0 || n >= doc.lineCount) { return false; }
-            const t = doc.lineAt(n).text.trim().replace(/^\*\s*/, '');
-            return /^[-=*|_~#+\s]{5,}$/.test(t);
+            if (n < 0 || n >= doc.lineCount) {
+                return false;
+            }
+            const text = doc.lineAt(n).text.trim().replace(/^\*\s*/, '');
+            return /^[-=*|_~#+\s]{5,}$/.test(text);
         };
+
         return check(lineNum - 1) || check(lineNum + 1);
     }
 }
