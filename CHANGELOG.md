@@ -2,6 +2,11 @@
 
 All notable changes to `positron-stata` are documented in this file.
 
+## 0.0.5
+
+- Added an editor title run dropdown with Run Selection, Run Selection and Advance, and Run Current File actions
+- Made Run Selection or Current Line and Advance the primary play button action with Ctrl/Cmd+Enter
+
 ## 0.0.4
 
 - Added Stata command auto-completion provider with descriptions and command aliases
