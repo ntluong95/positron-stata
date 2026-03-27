@@ -21,11 +21,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 		{ language: 'stata', scheme: 'untitled' },
 	];
 
-	const completionTriggers = [
-		...'abcdefghijklmnopqrstuvwxyz',
-		...'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
-	];
-
 	const onDidChangeLogLevel = (logLevel: vscode.LogLevel) => {
 		LOGGER.appendLine(`Log level: ${vscode.LogLevel[logLevel]}`);
 	};
@@ -44,7 +39,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 		vscode.languages.registerCompletionItemProvider(
 			stataDocumentSelector,
 			new StataCompletionProvider(variableManager),
-			...completionTriggers,
 		),
 		vscode.languages.registerHoverProvider(stataDocumentSelector, new StataHoverProvider()),
 		vscode.languages.registerDocumentSymbolProvider(stataDocumentSelector, new StataOutlineProvider()),

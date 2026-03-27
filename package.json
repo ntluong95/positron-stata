@@ -121,14 +121,7 @@
       {
         "command": "positronStata.toggleAutocompleteAutoRefresh",
         "category": "Stata",
-        "title": "Autocomplete Auto Refresh",
-        "when": "editorLangId == stata",
-        "actionBarOptions": {
-          "controlType": "toggle",
-          "leftTitle": "Auto Off",
-          "rightTitle": "Auto On",
-          "toggled": "config.positron.stata.autocomplete.variableRefresh.enabled"
-        }
+        "title": "Autocomplete Auto Refresh"
       },
       {
         "command": "positronStata.restartSession",
@@ -152,13 +145,6 @@
           "command": "positronStata.createNewFile",
           "group": "file",
           "when": "!virtualWorkspace"
-        }
-      ],
-      "editor/actions/left": [
-        {
-          "command": "positronStata.toggleAutocompleteAutoRefresh",
-          "when": "editorLangId == stata",
-          "group": "wz@4"
         }
       ],
       "editor/title/run": [
@@ -370,7 +356,9 @@
     "configurationDefaults": {
       "[stata]": {
         "editor.tabSize": 4,
-        "editor.insertSpaces": true
+        "editor.insertSpaces": true,
+        "editor.quickSuggestions": false,
+        "editor.suggestOnTriggerCharacters": false
       }
     }
   },

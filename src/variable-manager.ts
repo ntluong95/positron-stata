@@ -8,9 +8,14 @@ import { StataSession } from "./session";
 
 export type VariableRefreshReason = "manual" | "afterRun" | "interval";
 
+export interface StataAutocompleteVariable {
+    name: string;
+    label?: string;
+}
+
 export class StataVariableManager implements vscode.Disposable {
-    private readonly _cache = new Map<string, string[]>();
-    private readonly _inFlight = new Map<string, Promise<string[]>>();
+    private readonly _cache = new Map<string, StataAutocompleteVariable[]>();
+    private readonly _inFlight = new Map<string, Promise<StataAutocompleteVariable[]>>();
     private readonly _disposables: vscode.Disposable[] = [];
     private _intervalHandle: NodeJS.Timeout | undefined;
     private _lastActiveSessionId: string | undefined;
@@ -36,6 +41,10 @@ export class StataVariableManager implements vscode.Disposable {
     }
 
     getVariables(sessionId?: string): string[] {
+        return this.getVariableEntries(sessionId).map((variable) => variable.name);
+    }
+
+    getVariableEntries(sessionId?: string): StataAutocompleteVariable[] {
         const resolvedSessionId = sessionId || this._lastActiveSessionId;
         if (resolvedSessionId && this._cache.has(resolvedSessionId)) {
             return this._cache.get(resolvedSessionId) || [];
@@ -50,13 +59,18 @@ export class StataVariableManager implements vscode.Disposable {
     }
 
     async getVariablesForForegroundSession(): Promise<string[]> {
+        const variables = await this.getVariableEntriesForForegroundSession();
+        return variables.map((variable) => variable.name);
+    }
+
+    async getVariableEntriesForForegroundSession(): Promise<StataAutocompleteVariable[]> {
         const session = await this.resolveForegroundStataSession(false);
         if (session) {
             this._lastActiveSessionId = session.metadata.sessionId;
-            return this.getVariables(session.metadata.sessionId);
+            return this.getVariableEntries(session.metadata.sessionId);
         }
 
-        return this.getVariables();
+        return this.getVariableEntries();
     }
 
     async refreshForegroundSession(
@@ -128,7 +142,7 @@ export class StataVariableManager implements vscode.Disposable {
     private async refreshBySessionId(
         sessionId: string,
         reason: VariableRefreshReason,
-    ): Promise<string[]> {
+    ): Promise<StataAutocompleteVariable[]> {
         const session = await this.resolveSessionById(sessionId);
         if (!session) {
             return [];
@@ -140,7 +154,7 @@ export class StataVariableManager implements vscode.Disposable {
     private async refreshSession(
         session: StataSession,
         reason: VariableRefreshReason,
-    ): Promise<string[]> {
+    ): Promise<StataAutocompleteVariable[]> {
         const sessionId = session.metadata.sessionId;
         this._lastActiveSessionId = sessionId;
 
@@ -165,8 +179,8 @@ export class StataVariableManager implements vscode.Disposable {
     private async fetchVariablesFromSession(
         session: StataSession,
         reason: VariableRefreshReason,
-    ): Promise<string[]> {
-        const variables = await session.listDatasetVariableNames();
+    ): Promise<StataAutocompleteVariable[]> {
+        const variables = await session.listDatasetVariables();
         const normalized = this.normalizeVariableNames(variables);
         this._logger.debug(
             `Autocomplete variable refresh (${reason}) loaded ${normalized.length} variables for session ${session.metadata.sessionId}`,
@@ -174,12 +188,14 @@ export class StataVariableManager implements vscode.Disposable {
         return normalized;
     }
 
-    private normalizeVariableNames(variableNames: string[]): string[] {
+    private normalizeVariableNames(
+        variableNames: StataAutocompleteVariable[],
+    ): StataAutocompleteVariable[] {
         const seen = new Set<string>();
-        const normalized: string[] = [];
+        const normalized: StataAutocompleteVariable[] = [];
 
-        for (const variableName of variableNames) {
-            const trimmed = variableName.trim();
+        for (const variable of variableNames) {
+            const trimmed = variable.name.trim();
             if (!trimmed) {
                 continue;
             }
@@ -190,10 +206,14 @@ export class StataVariableManager implements vscode.Disposable {
             }
 
             seen.add(key);
-            normalized.push(trimmed);
+            const label = typeof variable.label === "string" ? variable.label.trim() : "";
+            normalized.push({
+                name: trimmed,
+                label: label || undefined,
+            });
         }
 
-        return normalized.sort((left, right) => left.localeCompare(right));
+        return normalized.sort((left, right) => left.name.localeCompare(right.name));
     }
 
     private async resolveForegroundStataSession(

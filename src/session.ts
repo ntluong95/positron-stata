@@ -63,6 +63,11 @@ interface VariablesDeleteParams {
   names?: string[];
 }
 
+export interface DatasetVariableInfo {
+  name: string;
+  label?: string;
+}
+
 const DATASET_ACCESS_KEY = "__stata_dataset__";
 const COLUMN_ACCESS_KEY_PREFIX = "column:";
 const DATASET_VARIABLE_PATH = [DATASET_ACCESS_KEY];
@@ -410,13 +415,28 @@ export class StataSession
   }
 
   async listDatasetVariableNames(): Promise<string[]> {
+    const variables = await this.listDatasetVariables();
+    return variables.map((variable) => variable.name);
+  }
+
+  async listDatasetVariables(): Promise<DatasetVariableInfo[]> {
     const metadata = await this.fetchDatasetMetadata();
     if (!metadata || metadata.columns.length === 0) {
       return [];
     }
 
+    const labelByLowerName = new Map<string, string>();
+    for (const [labelName, labelValue] of Object.entries(metadata.column_labels || {})) {
+      const key = String(labelName || "").trim().toLowerCase();
+      const value = typeof labelValue === "string" ? labelValue.trim() : "";
+      if (!key || !value || labelByLowerName.has(key)) {
+        continue;
+      }
+      labelByLowerName.set(key, value);
+    }
+
     const seen = new Set<string>();
-    const variables: string[] = [];
+    const variables: DatasetVariableInfo[] = [];
     for (const column of metadata.columns) {
       const name = String(column || "").trim();
       if (!name) {
@@ -429,7 +449,11 @@ export class StataSession
       }
 
       seen.add(key);
-      variables.push(name);
+      const trimmedLabel = labelByLowerName.get(key) || "";
+      variables.push({
+        name,
+        label: trimmedLabel || undefined,
+      });
     }
 
     return variables;

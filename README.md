@@ -22,6 +22,10 @@ Interactive data viewer showing variables, brief summaries and a spreadsheet-lik
 
 Stata `.do` file editor with syntax highlighting, inline execution controls, and integrated results.
 
+![DO-file syntax highlighting](https://raw.githubusercontent.com/ntluong95/positron-stata/refs/heads/main/resources/completion_provider.png)
+
+Add a completion provider per Trigger sugestion, providing variable list and label
+
 ### Environment & Plots
 
 ![Environment and plot panes](https://raw.githubusercontent.com/ntluong95/positron-stata/refs/heads/main/resources/environment_and_plot.png)
