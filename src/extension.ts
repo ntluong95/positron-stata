@@ -9,6 +9,7 @@ import { StataHoverProvider } from './hoverProvider';
 import { StataOutlineProvider } from './outlineProvider';
 import { StataRuntimeManager } from './runtime-manager';
 import { StataServerManager } from './server-manager';
+import { StataVariableManager } from './variable-manager';
 
 export const LOGGER = vscode.window.createOutputChannel('Positron Stata MCP', { log: true });
 
@@ -34,21 +35,29 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
 	serverManager = new StataServerManager(context, LOGGER);
 	const runtimeManager = new StataRuntimeManager(context, serverManager);
+	const variableManager = new StataVariableManager(runtimeManager, LOGGER);
 
 	context.subscriptions.push(
 		serverManager,
+		variableManager,
 		positron.runtime.registerLanguageRuntimeManager('stata', runtimeManager),
 		vscode.languages.registerCompletionItemProvider(
 			stataDocumentSelector,
-			new StataCompletionProvider(),
+			new StataCompletionProvider(variableManager),
 			...completionTriggers,
 		),
 		vscode.languages.registerHoverProvider(stataDocumentSelector, new StataHoverProvider()),
 		vscode.languages.registerDocumentSymbolProvider(stataDocumentSelector, new StataOutlineProvider()),
 		registerHelpTopicProvider(),
+		vscode.workspace.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration('positron.stata.autocomplete')) {
+				variableManager.reconfigureFromSettings();
+			}
+		}),
 	);
 
-	registerCommands(context, runtimeManager, serverManager);
+	registerCommands(context, runtimeManager, serverManager, variableManager);
+	variableManager.reconfigureFromSettings();
 
 	if (getStataConfiguration().autoStartServer) {
 		void serverManager.warmup();

@@ -62,6 +62,7 @@ On first launch the extension can provision its own Python environment via [`pyt
 - `Stata: Run Current File`
 - `Stata: Stop Execution`
 - `Stata: View Data`
+- `Stata: Refresh Autocomplete Variables`
 - `Stata: Restart Session`
 - `Stata: Test Server Connection`
 - `Stata: Show Extension Logs`
@@ -88,6 +89,9 @@ The extension uses the `positron.stata.*` namespace:
 - `positron.stata.multiSession.maxSessions`
 - `positron.stata.multiSession.sessionTimeout`
 - `positron.stata.dataViewer.maxRows`
+- `positron.stata.autocomplete.refreshAfterRun`
+- `positron.stata.autocomplete.variableRefresh.enabled`
+- `positron.stata.autocomplete.variableRefresh.intervalSeconds`
 
 ## Attribution And Licensing
 

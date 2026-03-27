@@ -27,6 +27,7 @@ import { StataInstallation } from "./stata-installation";
 import { StataDataExplorer } from "./data-explorer";
 import { StataHelpServer } from "./help-server";
 import { buildStataConsoleBanner } from "./terminal";
+import { notifyStataExecutionCompleted } from "./autocomplete-events";
 
 interface RuntimeResourceUsage {
   [key: string]: unknown;
@@ -225,8 +226,7 @@ class SelectionEchoFilter {
 }
 
 export class StataSession
-  implements positron.LanguageRuntimeSession, vscode.Disposable
-{
+  implements positron.LanguageRuntimeSession, vscode.Disposable {
   private readonly _messageEmitter =
     new vscode.EventEmitter<positron.LanguageRuntimeMessage>();
   private readonly _stateEmitter =
@@ -368,6 +368,7 @@ export class StataSession
       this.enterIdleState(executionId);
       await this.pollWorkingDirectory(workingDirectoryChanged);
       await this.refreshVariableClients();
+      notifyStataExecutionCompleted(this.metadata.sessionId);
     }
   }
 
@@ -406,6 +407,32 @@ export class StataSession
       this.metadata.sessionId,
     );
     return output.trim();
+  }
+
+  async listDatasetVariableNames(): Promise<string[]> {
+    const metadata = await this.fetchDatasetMetadata();
+    if (!metadata || metadata.columns.length === 0) {
+      return [];
+    }
+
+    const seen = new Set<string>();
+    const variables: string[] = [];
+    for (const column of metadata.columns) {
+      const name = String(column || "").trim();
+      if (!name) {
+        continue;
+      }
+
+      const key = name.toLowerCase();
+      if (seen.has(key)) {
+        continue;
+      }
+
+      seen.add(key);
+      variables.push(name);
+    }
+
+    return variables;
   }
 
   isCodeFragmentComplete(
@@ -692,6 +719,7 @@ export class StataSession
       this.enterIdleState(executionId);
       await this.pollWorkingDirectory(workingDirectoryChanged);
       await this.refreshVariableClients();
+      notifyStataExecutionCompleted(this.metadata.sessionId);
     }
   }
 

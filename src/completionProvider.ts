@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { StataVariableManager } from './variable-manager';
 
 interface CmdInfo {
     label: string;
@@ -154,18 +155,80 @@ const COMMANDS: CmdInfo[] = [
 ];
 
 export class StataCompletionProvider implements vscode.CompletionItemProvider {
-    private items: vscode.CompletionItem[];
+    private builtInItems: vscode.CompletionItem[];
 
-    constructor() {
-        this.items = COMMANDS.map(cmd => {
+    constructor(private readonly variableManager: StataVariableManager) {
+        this.builtInItems = COMMANDS.map(cmd => {
             const item = new vscode.CompletionItem(cmd.label, cmd.kind);
             item.detail = cmd.detail;
             item.insertText = cmd.label;
+            item.sortText = `3_${cmd.label.toLowerCase()}`;
             return item;
         });
     }
 
-    provideCompletionItems(): vscode.CompletionItem[] {
-        return this.items;
+    async provideCompletionItems(document: vscode.TextDocument): Promise<vscode.CompletionItem[]> {
+        const userDefinedItems = this.buildUserDefinedProgramItems(document);
+        const variableNames = await this.variableManager.getVariablesForForegroundSession();
+        const variableItems = this.buildVariableItems(variableNames);
+        return this.mergeByLabel([...userDefinedItems, ...variableItems, ...this.builtInItems]);
+    }
+
+    private buildUserDefinedProgramItems(document: vscode.TextDocument): vscode.CompletionItem[] {
+        const names = new Set<string>();
+        for (let lineNumber = 0; lineNumber < document.lineCount; lineNumber++) {
+            const trimmed = document.lineAt(lineNumber).text.trim();
+            if (!trimmed || trimmed.startsWith('*') || trimmed.startsWith('//')) {
+                continue;
+            }
+
+            const programMatch = trimmed.match(/^program\s+(?:define\s+)?([A-Za-z_][A-Za-z0-9_]*)/i);
+            if (!programMatch) {
+                continue;
+            }
+
+            const programName = programMatch[1];
+            if (/^(drop|dir|list|define)$/i.test(programName) && !/^program\s+define\s+/i.test(trimmed)) {
+                continue;
+            }
+
+            names.add(programName);
+        }
+
+        return [...names].map(name => {
+            const item = new vscode.CompletionItem(name, vscode.CompletionItemKind.Function);
+            item.detail = 'User-defined Stata program';
+            item.insertText = name;
+            item.sortText = `1_${name.toLowerCase()}`;
+            return item;
+        });
+    }
+
+    private buildVariableItems(variableNames: readonly string[]): vscode.CompletionItem[] {
+        return variableNames.map(variableName => {
+            const item = new vscode.CompletionItem(variableName, vscode.CompletionItemKind.Variable);
+            item.detail = 'Variable from active dataset';
+            item.insertText = variableName;
+            item.sortText = `2_${variableName.toLowerCase()}`;
+            return item;
+        });
+    }
+
+    private mergeByLabel(items: readonly vscode.CompletionItem[]): vscode.CompletionItem[] {
+        const merged: vscode.CompletionItem[] = [];
+        const seen = new Set<string>();
+
+        for (const item of items) {
+            const label = typeof item.label === 'string' ? item.label : item.label.label;
+            const key = label.toLowerCase();
+            if (seen.has(key)) {
+                continue;
+            }
+
+            seen.add(key);
+            merged.push(item);
+        }
+
+        return merged;
     }
 }

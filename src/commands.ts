@@ -7,6 +7,7 @@ import { StataRuntimeManager } from './runtime-manager';
 import { StataServerManager } from './server-manager';
 import { StataSession } from './session';
 import { getNextStataExecutablePosition, getStataBlockBounds } from './stata-selection';
+import { StataVariableManager } from './variable-manager';
 
 interface EditorCommandTarget {
 	code: string;
@@ -135,6 +136,7 @@ export function registerCommands(
 	context: vscode.ExtensionContext,
 	runtimeManager: StataRuntimeManager,
 	serverManager: StataServerManager,
+	variableManager: StataVariableManager,
 ): void {
 	context.subscriptions.push(
 		vscode.commands.registerCommand('positronStata.createNewFile', async () => {
@@ -209,6 +211,23 @@ export function registerCommands(
 			}
 
 			await session.showDataViewer();
+		}),
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand('positronStata.refreshAutocompleteVariables', async () => {
+			try {
+				const count = await variableManager.refreshForegroundSession('manual', true);
+				if (count === undefined) {
+					vscode.window.showWarningMessage('No Stata session is available to refresh autocomplete variables.');
+					return;
+				}
+
+				vscode.window.showInformationMessage(`Refreshed Stata autocomplete variables (${count} found).`);
+			} catch (error) {
+				const message = error instanceof Error ? error.message : String(error);
+				vscode.window.showErrorMessage(`Failed to refresh Stata autocomplete variables: ${message}`);
+			}
 		}),
 	);
 
