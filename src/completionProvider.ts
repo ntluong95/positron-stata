@@ -1,10 +1,18 @@
 import * as vscode from 'vscode';
+import { StataAutocompleteVariable, StataVariableManager } from './variable-manager';
 
 interface CmdInfo {
     label: string;
     detail: string;
     kind: vscode.CompletionItemKind;
 }
+
+const VARIABLE_CONTEXT_COMMANDS = new Set<string>([
+    'summarize', 'sum', 'describe', 'desc', 'list', 'lis', 'li', 'tabulate', 'tab', 'tabstat',
+    'correlate', 'corr', 'pwcorr', 'reg', 'regress', 'logit', 'probit', 'ologit', 'poisson',
+    'nbreg', 'qreg', 'mean', 'inspect', 'keep', 'drop', 'rename', 'recode', 'replace', 'order',
+    'sort', 'gsort', 'egen', 'gen', 'generate', 'collapse', 'scatter', 'twoway', 'graph',
+]);
 
 // Common Stata commands with descriptions
 const COMMANDS: CmdInfo[] = [
@@ -154,18 +162,201 @@ const COMMANDS: CmdInfo[] = [
 ];
 
 export class StataCompletionProvider implements vscode.CompletionItemProvider {
-    private items: vscode.CompletionItem[];
+    private builtInItems: vscode.CompletionItem[];
 
-    constructor() {
-        this.items = COMMANDS.map(cmd => {
+    constructor(private readonly variableManager: StataVariableManager) {
+        this.builtInItems = COMMANDS.map(cmd => {
             const item = new vscode.CompletionItem(cmd.label, cmd.kind);
             item.detail = cmd.detail;
             item.insertText = cmd.label;
+            item.sortText = `3_${cmd.label.toLowerCase()}`;
             return item;
         });
     }
 
-    provideCompletionItems(): vscode.CompletionItem[] {
-        return this.items;
+    async provideCompletionItems(
+        document: vscode.TextDocument,
+        position: vscode.Position,
+        _token: vscode.CancellationToken,
+        _context: vscode.CompletionContext,
+    ): Promise<vscode.CompletionItem[]> {
+        const linePrefix = document.lineAt(position.line).text.slice(0, position.character);
+        if (this.isCommentLine(linePrefix)) {
+            return [];
+        }
+
+        const userDefinedItems = this.buildUserDefinedProgramItems(document);
+        const runtimeVariables = await this.variableManager.getVariableEntriesForForegroundSession();
+        const extractedVariables = runtimeVariables.length === 0
+            ? [...this.extractVariableNames(document)]
+            : [];
+        const variableEntries = this.normalizeVariableEntries([
+            ...runtimeVariables,
+            ...extractedVariables.map((name) => ({ name })),
+        ]);
+        const variableItems = this.buildVariableItems(variableEntries);
+
+        const inVariableContext = this.isVariableArgumentContext(linePrefix);
+        if (inVariableContext) {
+            return this.mergeByLabel([...variableItems, ...userDefinedItems, ...this.builtInItems]);
+        }
+
+        return this.mergeByLabel([...userDefinedItems, ...variableItems, ...this.builtInItems]);
+    }
+
+    private buildUserDefinedProgramItems(document: vscode.TextDocument): vscode.CompletionItem[] {
+        const names = new Set<string>();
+        for (let lineNumber = 0; lineNumber < document.lineCount; lineNumber++) {
+            const trimmed = document.lineAt(lineNumber).text.trim();
+            if (!trimmed || trimmed.startsWith('*') || trimmed.startsWith('//')) {
+                continue;
+            }
+
+            const programMatch = trimmed.match(/^program\s+(?:define\s+)?([A-Za-z_][A-Za-z0-9_]*)/i);
+            if (!programMatch) {
+                continue;
+            }
+
+            const programName = programMatch[1];
+            if (/^(drop|dir|list|define)$/i.test(programName) && !/^program\s+define\s+/i.test(trimmed)) {
+                continue;
+            }
+
+            names.add(programName);
+        }
+
+        return [...names].map(name => {
+            const item = new vscode.CompletionItem(name, vscode.CompletionItemKind.Function);
+            item.detail = 'User-defined Stata program';
+            item.insertText = name;
+            item.sortText = `1_${name.toLowerCase()}`;
+            return item;
+        });
+    }
+
+    private buildVariableItems(variableEntries: readonly StataAutocompleteVariable[]): vscode.CompletionItem[] {
+        return variableEntries.map((variable) => {
+            const item = new vscode.CompletionItem(variable.name, vscode.CompletionItemKind.Variable);
+            item.detail = variable.label;
+            item.insertText = variable.name;
+            item.sortText = `2_${variable.name.toLowerCase()}`;
+            return item;
+        });
+    }
+
+    private isCommentLine(linePrefix: string): boolean {
+        const trimmed = linePrefix.trimStart();
+        return trimmed.startsWith('*') || trimmed.startsWith('//');
+    }
+
+    private isVariableArgumentContext(linePrefix: string): boolean {
+        const beforeComment = linePrefix.split('//')[0] || '';
+        const trimmed = beforeComment.trimStart();
+        if (!trimmed || trimmed.startsWith('*')) {
+            return false;
+        }
+
+        const firstWhitespace = trimmed.search(/\s/);
+        if (firstWhitespace < 0) {
+            return false;
+        }
+
+        const command = trimmed.slice(0, firstWhitespace).toLowerCase();
+        return VARIABLE_CONTEXT_COMMANDS.has(command);
+    }
+
+    private extractVariableNames(document: vscode.TextDocument): Set<string> {
+        const variables = new Set<string>();
+
+        for (let i = 0; i < document.lineCount; i++) {
+            const line = document.lineAt(i).text;
+            const trimmed = line.trimStart();
+            if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('*')) {
+                continue;
+            }
+
+            const genMatch = line.match(/\b(gen|generate|egen)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=/i);
+            if (genMatch?.[2]) {
+                variables.add(genMatch[2]);
+            }
+
+            const renameDropKeepMatch = line.match(/\b(rename|drop|keep)\s+(.*?)(?:\n|if|in|,|$)/i);
+            if (renameDropKeepMatch?.[2]) {
+                const names = renameDropKeepMatch[2]
+                    .split(/[\s,]+/)
+                    .filter((candidate) => /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(candidate));
+                names.forEach((name) => variables.add(name));
+            }
+
+            const cmdPatterns = [
+                /\b(summarize|sum|describe|desc|list|lis|li|tabulate|tab|tabstat|correlate|corr|pwcorr)\s+(.*?)(?:\n|,|$)/i,
+                /\b(reg|regress|logit|probit|ologit|poisson|nbreg)\s+(.*?)\s+(?:if|in|,|$)/i,
+                /\b(scatter|twoway|graph)\s+(.*?)(?:\n|,|$)/i,
+            ];
+
+            for (const pattern of cmdPatterns) {
+                const match = line.match(pattern);
+                if (!match?.[2]) {
+                    continue;
+                }
+
+                const names = match[2]
+                    .split(/[\s,]+/)
+                    .filter((candidate) => candidate && !/^[0-9]/.test(candidate));
+                names.forEach((name) => {
+                    if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) {
+                        variables.add(name);
+                    }
+                });
+            }
+        }
+
+        return variables;
+    }
+
+    private normalizeVariableEntries(
+        values: readonly StataAutocompleteVariable[],
+    ): StataAutocompleteVariable[] {
+        const seen = new Set<string>();
+        const normalized: StataAutocompleteVariable[] = [];
+
+        for (const value of values) {
+            const trimmed = value.name.trim();
+            if (!trimmed) {
+                continue;
+            }
+
+            const key = trimmed.toLowerCase();
+            if (seen.has(key)) {
+                continue;
+            }
+
+            seen.add(key);
+            const label = typeof value.label === 'string' ? value.label.trim() : '';
+            normalized.push({
+                name: trimmed,
+                label: label || undefined,
+            });
+        }
+
+        return normalized.sort((left, right) => left.name.localeCompare(right.name));
+    }
+
+    private mergeByLabel(items: readonly vscode.CompletionItem[]): vscode.CompletionItem[] {
+        const merged: vscode.CompletionItem[] = [];
+        const seen = new Set<string>();
+
+        for (const item of items) {
+            const label = typeof item.label === 'string' ? item.label : item.label.label;
+            const key = label.toLowerCase();
+            if (seen.has(key)) {
+                continue;
+            }
+
+            seen.add(key);
+            merged.push(item);
+        }
+
+        return merged;
     }
 }

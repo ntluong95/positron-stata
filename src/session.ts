@@ -27,6 +27,7 @@ import { StataInstallation } from "./stata-installation";
 import { StataDataExplorer } from "./data-explorer";
 import { StataHelpServer } from "./help-server";
 import { buildStataConsoleBanner } from "./terminal";
+import { notifyStataExecutionCompleted } from "./autocomplete-events";
 
 interface RuntimeResourceUsage {
   [key: string]: unknown;
@@ -60,6 +61,11 @@ interface VariablesClearParams {
 
 interface VariablesDeleteParams {
   names?: string[];
+}
+
+export interface DatasetVariableInfo {
+  name: string;
+  label?: string;
 }
 
 const DATASET_ACCESS_KEY = "__stata_dataset__";
@@ -225,8 +231,7 @@ class SelectionEchoFilter {
 }
 
 export class StataSession
-  implements positron.LanguageRuntimeSession, vscode.Disposable
-{
+  implements positron.LanguageRuntimeSession, vscode.Disposable {
   private readonly _messageEmitter =
     new vscode.EventEmitter<positron.LanguageRuntimeMessage>();
   private readonly _stateEmitter =
@@ -368,6 +373,7 @@ export class StataSession
       this.enterIdleState(executionId);
       await this.pollWorkingDirectory(workingDirectoryChanged);
       await this.refreshVariableClients();
+      notifyStataExecutionCompleted(this.metadata.sessionId);
     }
   }
 
@@ -406,6 +412,51 @@ export class StataSession
       this.metadata.sessionId,
     );
     return output.trim();
+  }
+
+  async listDatasetVariableNames(): Promise<string[]> {
+    const variables = await this.listDatasetVariables();
+    return variables.map((variable) => variable.name);
+  }
+
+  async listDatasetVariables(): Promise<DatasetVariableInfo[]> {
+    const metadata = await this.fetchDatasetMetadata();
+    if (!metadata || metadata.columns.length === 0) {
+      return [];
+    }
+
+    const labelByLowerName = new Map<string, string>();
+    for (const [labelName, labelValue] of Object.entries(metadata.column_labels || {})) {
+      const key = String(labelName || "").trim().toLowerCase();
+      const value = typeof labelValue === "string" ? labelValue.trim() : "";
+      if (!key || !value || labelByLowerName.has(key)) {
+        continue;
+      }
+      labelByLowerName.set(key, value);
+    }
+
+    const seen = new Set<string>();
+    const variables: DatasetVariableInfo[] = [];
+    for (const column of metadata.columns) {
+      const name = String(column || "").trim();
+      if (!name) {
+        continue;
+      }
+
+      const key = name.toLowerCase();
+      if (seen.has(key)) {
+        continue;
+      }
+
+      seen.add(key);
+      const trimmedLabel = labelByLowerName.get(key) || "";
+      variables.push({
+        name,
+        label: trimmedLabel || undefined,
+      });
+    }
+
+    return variables;
   }
 
   isCodeFragmentComplete(
@@ -692,6 +743,7 @@ export class StataSession
       this.enterIdleState(executionId);
       await this.pollWorkingDirectory(workingDirectoryChanged);
       await this.refreshVariableClients();
+      notifyStataExecutionCompleted(this.metadata.sessionId);
     }
   }
 

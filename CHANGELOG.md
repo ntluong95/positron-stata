@@ -2,6 +2,10 @@
 
 All notable changes to `positron-stata` are documented in this file.
 
+## 0.0.7
+
+- Add a completion provider for variables of the current active dataset
+
 ## 0.0.6
 
 - Added official Stata command highlighting with abbreviation support via dedicated `official-commands` patterns

@@ -24,6 +24,9 @@ export interface StataConfiguration {
 	maxSessions: number;
 	sessionTimeout: number;
 	dataViewerMaxRows: number;
+	autocompleteRefreshAfterRun: boolean;
+	autocompleteVariableRefreshEnabled: boolean;
+	autocompleteVariableRefreshIntervalSeconds: number;
 }
 
 function normalizePath(value: string): string {
@@ -62,6 +65,12 @@ export function getStataConfiguration(): StataConfiguration {
 		maxSessions: asPositiveInteger(config.get<number>('multiSession.maxSessions', 100), 100),
 		sessionTimeout: asPositiveInteger(config.get<number>('multiSession.sessionTimeout', 3600), 3600),
 		dataViewerMaxRows: Math.max(100, asPositiveInteger(config.get<number>('dataViewer.maxRows', 100000), 100000)),
+		autocompleteRefreshAfterRun: config.get<boolean>('autocomplete.refreshAfterRun', true) !== false,
+		autocompleteVariableRefreshEnabled: config.get<boolean>('autocomplete.variableRefresh.enabled', false) === true,
+		autocompleteVariableRefreshIntervalSeconds: Math.max(
+			5,
+			asPositiveInteger(config.get<number>('autocomplete.variableRefresh.intervalSeconds', 30), 30),
+		),
 	};
 }
 

@@ -2,7 +2,7 @@
   "name": "positron-stata",
   "displayName": "Stata for Positron",
   "description": "Positron-native Stata extension that preserves the upstream stata-mcp server logic while adopting Positron runtime infrastructure.",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "publisher": "ntluong95",
   "private": false,
   "repository": {
@@ -39,6 +39,8 @@
     "onCommand:positronStata.runFile",
     "onCommand:positronStata.stopExecution",
     "onCommand:positronStata.viewData",
+    "onCommand:positronStata.refreshAutocompleteVariables",
+    "onCommand:positronStata.toggleAutocompleteAutoRefresh",
     "onCommand:positronStata.restartSession",
     "onCommand:positronStata.testServerConnection",
     "onCommand:positronStata.showLogs"
@@ -111,6 +113,17 @@
         "title": "View Data"
       },
       {
+        "command": "positronStata.refreshAutocompleteVariables",
+        "category": "Stata",
+        "title": "Refresh Autocomplete Variables",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "positronStata.toggleAutocompleteAutoRefresh",
+        "category": "Stata",
+        "title": "Autocomplete Auto Refresh"
+      },
+      {
         "command": "positronStata.restartSession",
         "category": "Stata",
         "title": "Restart Session"
@@ -168,6 +181,11 @@
         {
           "when": "resourceExtname == .do || resourceExtname == .ado || resourceExtname == .doh || editorLangId == stata",
           "command": "positronStata.viewData",
+          "group": "1_stata"
+        },
+        {
+          "when": "resourceExtname == .do || resourceExtname == .ado || resourceExtname == .doh || resourceExtname == .mata || editorLangId == stata",
+          "command": "positronStata.refreshAutocompleteVariables",
           "group": "1_stata"
         },
         {
@@ -316,13 +334,31 @@
           "default": 100000,
           "minimum": 100,
           "description": "Maximum rows returned to the Positron data viewer command."
+        },
+        "positron.stata.autocomplete.refreshAfterRun": {
+          "type": "boolean",
+          "default": true,
+          "description": "Refresh Stata autocomplete variable names after code execution completes."
+        },
+        "positron.stata.autocomplete.variableRefresh.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable timed refresh of dataset variable names used by autocomplete suggestions."
+        },
+        "positron.stata.autocomplete.variableRefresh.intervalSeconds": {
+          "type": "number",
+          "default": 30,
+          "minimum": 5,
+          "description": "Interval in seconds for timed autocomplete variable refresh when enabled."
         }
       }
     },
     "configurationDefaults": {
       "[stata]": {
         "editor.tabSize": 4,
-        "editor.insertSpaces": true
+        "editor.insertSpaces": true,
+        "editor.quickSuggestions": false,
+        "editor.suggestOnTriggerCharacters": false
       }
     }
   },
