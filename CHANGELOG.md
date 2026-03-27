@@ -2,6 +2,11 @@
 
 All notable changes to `positron-stata` are documented in this file.
 
+## 0.0.7
+
+- Added an editor actions-left toggle control to turn autocomplete variable auto-refresh on/off for Stata editors
+- Added `positronStata.toggleAutocompleteAutoRefresh` command to flip `positron.stata.autocomplete.variableRefresh.enabled`
+
 ## 0.0.6
 
 - Added official Stata command highlighting with abbreviation support via dedicated `official-commands` patterns

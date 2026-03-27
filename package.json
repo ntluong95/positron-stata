@@ -40,6 +40,7 @@
     "onCommand:positronStata.stopExecution",
     "onCommand:positronStata.viewData",
     "onCommand:positronStata.refreshAutocompleteVariables",
+    "onCommand:positronStata.toggleAutocompleteAutoRefresh",
     "onCommand:positronStata.restartSession",
     "onCommand:positronStata.testServerConnection",
     "onCommand:positronStata.showLogs"
@@ -118,6 +119,18 @@
         "icon": "$(refresh)"
       },
       {
+        "command": "positronStata.toggleAutocompleteAutoRefresh",
+        "category": "Stata",
+        "title": "Autocomplete Auto Refresh",
+        "when": "editorLangId == stata",
+        "actionBarOptions": {
+          "controlType": "toggle",
+          "leftTitle": "Auto Off",
+          "rightTitle": "Auto On",
+          "toggled": "config.positron.stata.autocomplete.variableRefresh.enabled"
+        }
+      },
+      {
         "command": "positronStata.restartSession",
         "category": "Stata",
         "title": "Restart Session"
@@ -139,6 +152,13 @@
           "command": "positronStata.createNewFile",
           "group": "file",
           "when": "!virtualWorkspace"
+        }
+      ],
+      "editor/actions/left": [
+        {
+          "command": "positronStata.toggleAutocompleteAutoRefresh",
+          "when": "editorLangId == stata",
+          "group": "wz@4"
         }
       ],
       "editor/title/run": [

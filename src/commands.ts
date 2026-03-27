@@ -92,6 +92,25 @@ function moveCursor(editor: vscode.TextEditor, lineNumber: number, character: nu
 	editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenterIfOutsideViewport);
 }
 
+async function toggleAutocompleteAutoRefreshSetting(): Promise<boolean> {
+	const activeResource = vscode.window.activeTextEditor?.document.uri;
+	const config = vscode.workspace.getConfiguration('positron.stata', activeResource);
+	const settingKey = 'autocomplete.variableRefresh.enabled';
+	const current = config.get<boolean>(settingKey, false) === true;
+	const nextValue = !current;
+
+	const inspection = config.inspect<boolean>(settingKey);
+	let target: vscode.ConfigurationTarget = vscode.ConfigurationTarget.Global;
+	if (inspection?.workspaceFolderValue !== undefined) {
+		target = vscode.ConfigurationTarget.WorkspaceFolder;
+	} else if (inspection?.workspaceValue !== undefined) {
+		target = vscode.ConfigurationTarget.Workspace;
+	}
+
+	await config.update(settingKey, nextValue, target);
+	return nextValue;
+}
+
 async function executeEditorCommand(
 	editor: vscode.TextEditor,
 	context: vscode.ExtensionContext,
@@ -227,6 +246,20 @@ export function registerCommands(
 			} catch (error) {
 				const message = error instanceof Error ? error.message : String(error);
 				vscode.window.showErrorMessage(`Failed to refresh Stata autocomplete variables: ${message}`);
+			}
+		}),
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand('positronStata.toggleAutocompleteAutoRefresh', async () => {
+			try {
+				const enabled = await toggleAutocompleteAutoRefreshSetting();
+				if (enabled) {
+					await variableManager.refreshForegroundSession('manual', false);
+				}
+			} catch (error) {
+				const message = error instanceof Error ? error.message : String(error);
+				vscode.window.showErrorMessage(`Failed to toggle autocomplete auto-refresh: ${message}`);
 			}
 		}),
 	);
