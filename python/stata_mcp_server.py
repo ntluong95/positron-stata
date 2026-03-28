@@ -178,6 +178,15 @@ def try_init_stata(stata_path):
     if stata_path:
         # Remove any quotes that might have been added
         stata_path = stata_path.strip('"\'')
+
+        # Users may provide the executable path; normalize to installation dir.
+        if os.path.isfile(stata_path):
+            inferred_installation_path = os.path.dirname(stata_path)
+            logging.warning(
+                f"Stata path points to a file, using parent directory: {inferred_installation_path}"
+            )
+            stata_path = inferred_installation_path
+
         STATA_PATH = stata_path
         logging.info(f"Using Stata path: {stata_path}")
 
@@ -195,12 +204,20 @@ def try_init_stata(stata_path):
             os.environ['SYSDIR_STATA'] = stata_path
 
         stata_utilities_path = os.path.join(os.environ.get('SYSDIR_STATA', ''), 'utilities')
-        if os.path.exists(stata_utilities_path):
-            sys.path.insert(0, stata_utilities_path)
-            logging.debug(f"Added Stata utilities path to sys.path: {stata_utilities_path}")
+        pystata_path = os.path.join(stata_utilities_path, 'pystata')
+        added_paths = []
+        for candidate in (stata_utilities_path, pystata_path):
+            if os.path.exists(candidate):
+                if candidate not in sys.path:
+                    sys.path.insert(0, candidate)
+                added_paths.append(candidate)
+
+        if added_paths:
+            logging.debug(f"Added Stata Python paths to sys.path: {added_paths}")
         else:
-            warning_msg = f"Stata utilities path not found: {stata_utilities_path}"
-            logging.warning(warning_msg)
+            logging.warning(
+                f"Stata Python paths not found: {stata_utilities_path}, {pystata_path}"
+            )
 
         # Try to import pystata or stata-sfi
         try:
@@ -336,9 +353,17 @@ def try_init_stata(stata_path):
                     stata_available = False
                     return False
             except Exception as setup_error:
-                error_msg = f"Could not import pystata or sfi: {str(setup_error)}"
+                error_msg = (
+                    "Could not import Stata Python bridge modules. "
+                    f"pystata import failed: {str(config_error)}. "
+                    f"stata_setup/sfi fallback failed: {str(setup_error)}"
+                )
                 logging.error(error_msg)
                 print(f"ERROR: {error_msg}")
+                print(
+                    "Ensure positron.stata.installationPath points to the Stata installation "
+                    "directory (not StataMP.exe/StataSE.exe), and that the utilities folder exists."
+                )
                 print("Stata commands will not be available")
             has_stata = False
             stata_available = False

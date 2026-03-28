@@ -59,44 +59,6 @@ Preview of Stata output embedded inline in Quarto (.qmd) documents — rendered 
 
 On first launch the extension can provision its own Python environment via [`python/check-python.js`](./python/check-python.js). The script prefers `uv`, creates `.venv`, installs [`python/requirements.txt`](./python/requirements.txt), and stores the resolved interpreter in `.python-path`.
 
-## Commands
-
-- `Stata: New Stata File`
-- `Stata: Run Selection or Current Line`
-- `Stata: Run Current File`
-- `Stata: Stop Execution`
-- `Stata: View Data`
-- `Stata: Refresh Autocomplete Variables`
-- `Stata: Restart Session`
-- `Stata: Test Server Connection`
-- `Stata: Show Extension Logs`
-
-## Configuration
-
-The extension uses the `positron.stata.*` namespace:
-
-- `positron.stata.installationPath`
-- `positron.stata.edition`
-- `positron.stata.server.host`
-- `positron.stata.server.port`
-- `positron.stata.server.autoStart`
-- `positron.stata.server.forcePort`
-- `positron.stata.debug`
-- `positron.stata.autoDisplayGraphs`
-- `positron.stata.runSelectionTimeout`
-- `positron.stata.runFileTimeout`
-- `positron.stata.workingDirectory.mode`
-- `positron.stata.workingDirectory.customPath`
-- `positron.stata.mcp.resultDisplayMode`
-- `positron.stata.mcp.maxOutputTokens`
-- `positron.stata.multiSession.enabled`
-- `positron.stata.multiSession.maxSessions`
-- `positron.stata.multiSession.sessionTimeout`
-- `positron.stata.dataViewer.maxRows`
-- `positron.stata.autocomplete.refreshAfterRun`
-- `positron.stata.autocomplete.variableRefresh.enabled`
-- `positron.stata.autocomplete.variableRefresh.intervalSeconds`
-
 ## Attribution And Licensing
 
 This project intentionally reuses upstream logic from `hanlulong/stata-mcp`.

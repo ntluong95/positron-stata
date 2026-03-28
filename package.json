@@ -2,7 +2,7 @@
   "name": "positron-stata",
   "displayName": "Stata for Positron",
   "description": "Positron-native Stata extension that preserves the upstream stata-mcp server logic while adopting Positron runtime infrastructure.",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "publisher": "ntluong95",
   "private": false,
   "repository": {
@@ -320,20 +320,6 @@
           "default": "",
           "description": "Custom working directory used when workingDirectory.mode is set to custom."
         },
-        "positron.stata.mcp.resultDisplayMode": {
-          "type": "string",
-          "enum": [
-            "compact",
-            "full"
-          ],
-          "default": "compact",
-          "description": "Output filtering mode used by the retained Stata MCP server."
-        },
-        "positron.stata.mcp.maxOutputTokens": {
-          "type": "number",
-          "default": 10000,
-          "description": "Approximate token budget for MCP responses before the Python server falls back to file output."
-        },
         "positron.stata.multiSession.enabled": {
           "type": "boolean",
           "default": true,
@@ -373,11 +359,6 @@
           "default": 30,
           "minimum": 5,
           "description": "Interval in seconds for timed autocomplete variable refresh when enabled."
-        },
-        "positron.stata.outline.numberingShow": {
-          "type": "boolean",
-          "default": false,
-          "description": "Show hierarchical numbering in the Stata outline for section headers written as ** # through ** ######."
         }
       }
     },

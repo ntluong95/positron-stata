@@ -2,6 +2,10 @@
 
 All notable changes to `positron-stata` are documented in this file.
 
+## 0.0.9
+
+- Fix startup error on Windows
+
 ## 0.0.8
 
 - Add multi-level outline recognition for section headers from ** # to ** ######
