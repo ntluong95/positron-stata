@@ -322,4 +322,21 @@ export function registerCommands(
 			serverManager.showLogs();
 		}),
 	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand('positronStata.copyLastTable', async () => {
+			const session = await getOrStartStataSession(runtimeManager);
+			if (!session) {
+				return;
+			}
+
+			const copied = await session.copyLastTableToClipboard();
+			if (!copied) {
+				vscode.window.showWarningMessage('No table detected in recent Stata output.');
+				return;
+			}
+
+			vscode.window.showInformationMessage('Copied latest Stata table as tab-delimited text.');
+		}),
+	);
 }

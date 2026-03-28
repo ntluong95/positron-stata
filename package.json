@@ -2,7 +2,7 @@
   "name": "positron-stata",
   "displayName": "Stata for Positron",
   "description": "Positron-native Stata extension that preserves the upstream stata-mcp server logic while adopting Positron runtime infrastructure.",
-  "version": "0.0.9",
+  "version": "0.1.0",
   "publisher": "ntluong95",
   "private": false,
   "repository": {
@@ -44,7 +44,8 @@
     "onCommand:positronStata.toggleAutocompleteAutoRefresh",
     "onCommand:positronStata.restartSession",
     "onCommand:positronStata.testServerConnection",
-    "onCommand:positronStata.showLogs"
+    "onCommand:positronStata.showLogs",
+    "onCommand:positronStata.copyLastTable"
   ],
   "contributes": {
     "languageRuntimes": [
@@ -143,6 +144,11 @@
         "command": "positronStata.showLogs",
         "category": "Stata",
         "title": "Show Extension Logs"
+      },
+      {
+        "command": "positronStata.copyLastTable",
+        "category": "Stata",
+        "title": "Copy Last Output Table"
       }
     ],
     "menus": {

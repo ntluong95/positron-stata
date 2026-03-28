@@ -2,6 +2,10 @@
 
 All notable changes to `positron-stata` are documented in this file.
 
+## 0.1.0
+
+- Add command to copy the latest table output in a Excel-ready table
+
 ## 0.0.9
 
 - Fix startup error on Windows

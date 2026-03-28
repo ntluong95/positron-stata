@@ -23,6 +23,7 @@ import {
   isStatusLine,
   parseGraphsFromOutput,
 } from "./stata-output";
+import { extractLatestTableFromOutput } from "./stata-table";
 import { StataInstallation } from "./stata-installation";
 import { StataDataExplorer } from "./data-explorer";
 import { StataHelpServer } from "./help-server";
@@ -252,6 +253,7 @@ export class StataSession
   private readonly _dataExplorers = new Map<string, StataDataExplorer>();
   private _activeDataExplorer: StataDataExplorer | undefined;
   private readonly _helpServer = new StataHelpServer();
+  private _lastTableClipboardText: string | undefined;
 
   readonly onDidReceiveRuntimeMessage: vscode.Event<positron.LanguageRuntimeMessage> =
     this._messageEmitter.event;
@@ -357,6 +359,7 @@ export class StataSession
         this._workingDirectory = workingDirectory;
         workingDirectoryChanged = true;
       }
+      this.updateLatestTableCache(fullOutput);
       await this.emitGraphsIfNeeded(executionId, fullOutput);
     } catch (error) {
       if (isStreamAbortError(error)) {
@@ -632,6 +635,16 @@ export class StataSession
     }
   }
 
+  async copyLastTableToClipboard(): Promise<boolean> {
+    const tableText = this._lastTableClipboardText;
+    if (!tableText) {
+      return false;
+    }
+
+    await vscode.env.clipboard.writeText(tableText);
+    return true;
+  }
+
   async setWorkingDirectory(dir: string): Promise<void> {
     this._workingDirectory = dir || undefined;
     await this.pollWorkingDirectory(true);
@@ -725,6 +738,7 @@ export class StataSession
         this._workingDirectory = changedDirectory;
         workingDirectoryChanged = true;
       }
+      this.updateLatestTableCache(fullOutput);
       await this.emitGraphsIfNeeded(executionId, fullOutput);
     } catch (error) {
       if (isStreamAbortError(error)) {
@@ -1168,6 +1182,11 @@ export class StataSession
     return accessKey.startsWith(COLUMN_ACCESS_KEY_PREFIX)
       ? accessKey.slice(COLUMN_ACCESS_KEY_PREFIX.length)
       : accessKey;
+  }
+
+  private updateLatestTableCache(output: string): void {
+    const parsedTable = extractLatestTableFromOutput(output);
+    this._lastTableClipboardText = parsedTable?.tsv;
   }
 
   private async refreshVariableClients(): Promise<void> {
