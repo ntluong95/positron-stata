@@ -2,7 +2,7 @@
   "name": "positron-stata",
   "displayName": "Stata for Positron",
   "description": "Positron-native Stata extension that preserves the upstream stata-mcp server logic while adopting Positron runtime infrastructure.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "ntluong95",
   "private": false,
   "repository": {

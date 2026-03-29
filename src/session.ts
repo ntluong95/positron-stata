@@ -85,8 +85,7 @@ function aliasHome(directory: string): string {
 
   const directoryCompare =
     process.platform === "win32" ? directory.toLowerCase() : directory;
-  const homeCompare =
-    process.platform === "win32" ? home.toLowerCase() : home;
+  const homeCompare = process.platform === "win32" ? home.toLowerCase() : home;
 
   if (directoryCompare === homeCompare) {
     return "~";
@@ -108,9 +107,7 @@ function aliasHome(directory: string): string {
  * browse command.
  */
 function parseBrowseCommand(code: string): string | null {
-  const match = code.match(
-    /^\s*(br(o(w(se?)?)?)?)\s*(?:if\s+(.+))?$/i,
-  );
+  const match = code.match(/^\s*(br(o(w(se?)?)?)?)\s*(?:if\s+(.+))?$/i);
   if (!match) {
     return null;
   }
@@ -121,7 +118,10 @@ function parseChangeDirectoryCommand(code: string): string | null {
   const relevantLine = code
     .split(/\r?\n/)
     .map((line) => line.trim())
-    .filter((line) => line.length > 0 && !line.startsWith("*") && !line.startsWith("//"))
+    .filter(
+      (line) =>
+        line.length > 0 && !line.startsWith("*") && !line.startsWith("//"),
+    )
     .pop();
 
   if (!relevantLine) {
@@ -232,7 +232,8 @@ class SelectionEchoFilter {
 }
 
 export class StataSession
-  implements positron.LanguageRuntimeSession, vscode.Disposable {
+  implements positron.LanguageRuntimeSession, vscode.Disposable
+{
   private readonly _messageEmitter =
     new vscode.EventEmitter<positron.LanguageRuntimeMessage>();
   private readonly _stateEmitter =
@@ -293,7 +294,7 @@ export class StataSession
 
     this._runtimeInfo = {
       banner: this.buildStartupBanner(),
-      implementation_version: "MCP",
+      implementation_version: "PyStata",
       language_version: this._installation.version,
     };
 
@@ -411,7 +412,7 @@ export class StataSession
   async testConnection(): Promise<string> {
     const client = await this.ensureClient();
     const output = await client.runSelectionText(
-      'display "Hello from Positron Stata MCP!"',
+      'display "Hello from Positron PyStata Server!"',
       this.metadata.sessionId,
     );
     return output.trim();
@@ -429,8 +430,12 @@ export class StataSession
     }
 
     const labelByLowerName = new Map<string, string>();
-    for (const [labelName, labelValue] of Object.entries(metadata.column_labels || {})) {
-      const key = String(labelName || "").trim().toLowerCase();
+    for (const [labelName, labelValue] of Object.entries(
+      metadata.column_labels || {},
+    )) {
+      const key = String(labelName || "")
+        .trim()
+        .toLowerCase();
       const value = typeof labelValue === "string" ? labelValue.trim() : "";
       if (!key || !value || labelByLowerName.has(key)) {
         continue;
@@ -771,7 +776,12 @@ export class StataSession
     // Check if this is a Data Explorer comm (opened by us, not tracked in _clients)
     const dataExplorer = this._dataExplorers.get(clientId);
     if (dataExplorer) {
-      this.handleDataExplorerMessage(dataExplorer, clientId, messageId, message);
+      this.handleDataExplorerMessage(
+        dataExplorer,
+        clientId,
+        messageId,
+        message,
+      );
       return;
     }
 
@@ -812,14 +822,18 @@ export class StataSession
         );
         return;
       case "clear":
-        await this.clearVariables(rpc.params as VariablesClearParams | undefined);
+        await this.clearVariables(
+          rpc.params as VariablesClearParams | undefined,
+        );
         this.sendClientResult(clientId, messageId, null);
         return;
       case "delete":
         this.sendClientResult(
           clientId,
           messageId,
-          await this.deleteVariables(rpc.params as VariablesDeleteParams | undefined),
+          await this.deleteVariables(
+            rpc.params as VariablesDeleteParams | undefined,
+          ),
         );
         return;
       case "inspect":
@@ -1112,7 +1126,8 @@ export class StataSession
       return "";
     }
 
-    const hasMoreValues = (metadata.total_rows || metadata.rows || 0) > previewValues.length;
+    const hasMoreValues =
+      (metadata.total_rows || metadata.rows || 0) > previewValues.length;
     return `${previewValues.join(" ")}${hasMoreValues ? " ..." : ""}`;
   }
 
@@ -1135,9 +1150,7 @@ export class StataSession
     return String(value);
   }
 
-  private async clearVariables(
-    _params?: VariablesClearParams,
-  ): Promise<void> {
+  private async clearVariables(_params?: VariablesClearParams): Promise<void> {
     const client = await this.ensureClient();
     const response = await client.runSelectionText(
       "clear all",
@@ -1627,7 +1640,9 @@ export class StataSession
   /**
    * Find the first client ID matching a given type.
    */
-  private findClientByType(type: positron.RuntimeClientType): string | undefined {
+  private findClientByType(
+    type: positron.RuntimeClientType,
+  ): string | undefined {
     for (const [id, clientType] of this._clients.entries()) {
       if (clientType === type) {
         return id;

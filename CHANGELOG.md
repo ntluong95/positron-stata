@@ -2,6 +2,9 @@
 
 All notable changes to `positron-stata` are documented in this file.
 
+## 0.1.1
+- Fix text in the console are not well-aligned
+
 ## 0.1.0
 
 - Add command to copy the latest table output in a Excel-ready table

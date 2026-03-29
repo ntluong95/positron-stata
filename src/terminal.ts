@@ -53,8 +53,8 @@ export function buildStataConsoleBanner(useAnsi = true): string {
     `\r\n` +
     `${colors.cmd}  ___  ____  ____  ____  ____ \xAE${colors.reset}\r\n` +
     `${colors.cmd} /__    /   ____/   /   ____/${colors.reset}\r\n` +
-    `${colors.cmd} ___/   /   /___/   /   /___/${colors.reset}   ${colors.bold}Stata Console${colors.reset}\r\n` +
+    `${colors.cmd}___/   /   /___/   /   /___/${colors.reset}   ${colors.bold}Stata Console${colors.reset}\r\n` +
     `\r\n` +
-    `${colors.cmd} Positron-native session backed by the Stata MCP server.${colors.reset}\r\n\r\n`
+    `${colors.cmd} Positron-native session backed by the PyStata server.${colors.reset}\r\n\r\n`
   );
 }
