@@ -97,6 +97,14 @@ export class StataServerManager implements vscode.Disposable {
     this._logger.show(true);
   }
 
+  logInfo(message: string): void {
+    this._logger.info(message);
+  }
+
+  logWarning(message: string): void {
+    this._logger.warn(message);
+  }
+
   async stopServer(): Promise<void> {
     if (!this._serverProcess) {
       return;

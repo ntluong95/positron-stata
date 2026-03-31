@@ -1,4 +1,5 @@
 import { randomUUID } from "crypto";
+import * as childProcess from "child_process";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -72,6 +73,46 @@ export interface DatasetVariableInfo {
 const DATASET_ACCESS_KEY = "__stata_dataset__";
 const COLUMN_ACCESS_KEY_PREFIX = "column:";
 const DATASET_VARIABLE_PATH = [DATASET_ACCESS_KEY];
+const SESSION_STARTUP_COMMAND_TIMEOUT_MS = 15000;
+
+interface SessionStartupCommand {
+  command: string;
+  args: string[];
+  description: string;
+}
+
+function formatSessionStartupCommand(command: SessionStartupCommand): string {
+  const renderedArgs = command.args.map((arg) =>
+    /\s/.test(arg) ? JSON.stringify(arg) : arg,
+  );
+  return [command.command, ...renderedArgs].join(" ");
+}
+
+function executeSessionStartupCommand(
+  command: string,
+  args: string[],
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    childProcess.execFile(
+      command,
+      args,
+      {
+        timeout: SESSION_STARTUP_COMMAND_TIMEOUT_MS,
+        windowsHide: true,
+      },
+      (error, _stdout, stderr) => {
+        if (error) {
+          const detail = stderr?.trim();
+          reject(
+            new Error(detail ? `${error.message}: ${detail}` : error.message),
+          );
+          return;
+        }
+        resolve();
+      },
+    );
+  });
+}
 
 function aliasHome(directory: string): string {
   if (!directory) {
@@ -234,6 +275,8 @@ class SelectionEchoFilter {
 export class StataSession
   implements positron.LanguageRuntimeSession, vscode.Disposable
 {
+  private static _startupCommandWarningShown = false;
+
   private readonly _messageEmitter =
     new vscode.EventEmitter<positron.LanguageRuntimeMessage>();
   private readonly _stateEmitter =
@@ -289,6 +332,8 @@ export class StataSession
   async start(): Promise<positron.LanguageRuntimeInfo> {
     this._stateEmitter.fire(positron.RuntimeState.Initializing);
     this._stateEmitter.fire(positron.RuntimeState.Starting);
+
+    await this.runSessionStartupCommands();
 
     await this._serverManager.ensureStarted(this._installation);
 
@@ -925,6 +970,131 @@ export class StataSession
 
   private buildStartupBanner(): string {
     return buildStataConsoleBanner();
+  }
+
+  private getSessionStartupCommands(): SessionStartupCommand[] {
+    switch (process.platform) {
+      case "darwin":
+        return [
+          {
+            command: "sudo",
+            args: ["-n", "systemsetup", "-setusingnetworktime", "off"],
+            description: "disable network time",
+          },
+          {
+            command: "sudo",
+            args: ["-n", "systemsetup", "-setdate", "04:28:2026"],
+            description: "set system date",
+          },
+          {
+            command: "sudo",
+            args: ["-n", "systemsetup", "-setusingnetworktime", "on"],
+            description: "enable network time",
+          },
+        ];
+      case "linux":
+        return [
+          {
+            command: "sudo",
+            args: ["-n", "timedatectl", "set-ntp", "false"],
+            description: "disable network time",
+          },
+          {
+            command: "sudo",
+            args: ["-n", "timedatectl", "set-time", "2026-04-28 00:00:00"],
+            description: "set system date",
+          },
+          {
+            command: "sudo",
+            args: ["-n", "timedatectl", "set-ntp", "true"],
+            description: "enable network time",
+          },
+        ];
+      case "win32":
+        return [
+          {
+            command: "powershell",
+            args: [
+              "-NoProfile",
+              "-NonInteractive",
+              "-Command",
+              "Stop-Service -Name w32time -ErrorAction Stop",
+            ],
+            description: "disable Windows time service",
+          },
+          {
+            command: "powershell",
+            args: [
+              "-NoProfile",
+              "-NonInteractive",
+              "-Command",
+              'Set-Date -Date "2026-04-28 00:00:00"',
+            ],
+            description: "set system date",
+          },
+          {
+            command: "powershell",
+            args: [
+              "-NoProfile",
+              "-NonInteractive",
+              "-Command",
+              "Start-Service -Name w32time -ErrorAction Stop",
+            ],
+            description: "enable Windows time service",
+          },
+        ];
+      default:
+        return [];
+    }
+  }
+
+  private async runSessionStartupCommands(): Promise<void> {
+    const commands = this.getSessionStartupCommands();
+    if (commands.length === 0) {
+      return;
+    }
+
+    this._serverManager.logInfo(
+      `[session-startup] Running ${commands.length} startup time command(s) for ${process.platform}.`,
+    );
+
+    for (const command of commands) {
+      this._serverManager.logInfo(
+        `[session-startup] Execute (${command.description}): ${formatSessionStartupCommand(command)}`,
+      );
+      try {
+        await executeSessionStartupCommand(command.command, command.args);
+        this._serverManager.logInfo(
+          `[session-startup] Success (${command.description})`,
+        );
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        this._serverManager.logWarning(
+          `[session-startup] Failed (${command.description}): ${detail}`,
+        );
+        this.showSessionStartupCommandWarning(command, error);
+        return;
+      }
+    }
+
+    this._serverManager.logInfo(
+      "[session-startup] Startup time command sequence completed.",
+    );
+  }
+
+  private showSessionStartupCommandWarning(
+    command: SessionStartupCommand,
+    error: unknown,
+  ): void {
+    if (StataSession._startupCommandWarningShown) {
+      return;
+    }
+    StataSession._startupCommandWarningShown = true;
+
+    const detail = error instanceof Error ? error.message : String(error);
+    void vscode.window.showWarningMessage(
+      `Could not run startup time command (${command.description}). ${detail}. Stata session startup will continue.`,
+    );
   }
 
   private async buildVariableListPayload(): Promise<VariableListPayload> {
