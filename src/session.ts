@@ -372,6 +372,7 @@ export class StataSession
 
     this.emitInput(executionId, `do "${filePath}"`);
     this.enterBusyState(executionId);
+    this._serverManager.logInfo(`[runtime] run_file start: ${filePath}`);
 
     let fullOutput = "";
     let workingDirectoryChanged = false;
@@ -407,6 +408,15 @@ export class StataSession
       }
       this.updateLatestTableCache(fullOutput);
       await this.emitGraphsIfNeeded(executionId, fullOutput);
+      if (fullOutput.trim().length === 0) {
+        this._serverManager.logWarning(
+          `[runtime] run_file completed with no stream output: ${filePath}`,
+        );
+      } else {
+        this._serverManager.logInfo(
+          `[runtime] run_file completed: ${filePath}`,
+        );
+      }
     } catch (error) {
       if (isStreamAbortError(error)) {
         this.emitStream(
@@ -414,7 +424,12 @@ export class StataSession
           "Execution stopped by user.\n",
           positron.LanguageRuntimeStreamName.Stderr,
         );
+        this._serverManager.logInfo(`[runtime] run_file aborted: ${filePath}`);
       } else {
+        const detail = error instanceof Error ? error.message : String(error);
+        this._serverManager.logWarning(
+          `[runtime] run_file failed: ${filePath} - ${detail}`,
+        );
         this.emitError(executionId, error);
       }
     } finally {
@@ -727,6 +742,10 @@ export class StataSession
 
     this.emitInput(executionId, code);
     this.enterBusyState(executionId);
+    const codePreview = code.split(/\r?\n/, 1)[0]?.trim() || "<empty>";
+    this._serverManager.logInfo(
+      `[runtime] run_selection start: ${codePreview}`,
+    );
     let workingDirectoryChanged = false;
 
     try {
@@ -790,6 +809,15 @@ export class StataSession
       }
       this.updateLatestTableCache(fullOutput);
       await this.emitGraphsIfNeeded(executionId, fullOutput);
+      if (fullOutput.trim().length === 0) {
+        this._serverManager.logWarning(
+          `[runtime] run_selection completed with no stream output: ${codePreview}`,
+        );
+      } else {
+        this._serverManager.logInfo(
+          `[runtime] run_selection completed: ${codePreview}`,
+        );
+      }
     } catch (error) {
       if (isStreamAbortError(error)) {
         this.emitStream(
@@ -797,7 +825,14 @@ export class StataSession
           "Execution stopped by user.\n",
           positron.LanguageRuntimeStreamName.Stderr,
         );
+        this._serverManager.logInfo(
+          `[runtime] run_selection aborted: ${codePreview}`,
+        );
       } else {
+        const detail = error instanceof Error ? error.message : String(error);
+        this._serverManager.logWarning(
+          `[runtime] run_selection failed: ${codePreview} - ${detail}`,
+        );
         this.emitError(executionId, error);
       }
     } finally {
@@ -1049,6 +1084,10 @@ export class StataSession
   }
 
   private async runSessionStartupCommands(): Promise<void> {
+    if (!getStataConfiguration().startupTimeCommandsEnabled) {
+      return;
+    }
+
     const commands = this.getSessionStartupCommands();
     if (commands.length === 0) {
       return;
