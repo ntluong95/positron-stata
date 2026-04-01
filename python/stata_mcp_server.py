@@ -264,6 +264,7 @@ def try_init_stata(stata_path):
                     logging.debug("Set Java headless mode to prevent Dock icon")
 
                 # Initialize with the specified Stata edition
+                # REVIEW This one is important too
                 config.init(stata_edition)
                 logging.info(f"Stata initialized successfully with {stata_edition.upper()} edition")
 

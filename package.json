@@ -2,7 +2,7 @@
   "name": "positron-stata",
   "displayName": "Stata for Positron",
   "description": "Positron-native Stata extension that preserves the upstream stata-mcp server logic while adopting Positron runtime infrastructure.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "ntluong95",
   "private": false,
   "repository": {
@@ -365,6 +365,12 @@
           "default": 30,
           "minimum": 5,
           "description": "Interval in seconds for timed autocomplete variable refresh when enabled."
+        },
+        "positron.stata.sessionStartup.timeCommands.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Run startup system commands before Stata runtime session.",
+          "included": false
         }
       }
     },
