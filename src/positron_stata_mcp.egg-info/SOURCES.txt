@@ -1,0 +1,15 @@
+LICENSE
+README.md
+pyproject.toml
+src/positron_stata_mcp.egg-info/PKG-INFO
+src/positron_stata_mcp.egg-info/SOURCES.txt
+src/positron_stata_mcp.egg-info/dependency_links.txt
+src/positron_stata_mcp.egg-info/requires.txt
+src/positron_stata_mcp.egg-info/top_level.txt
+tests/test_compact_filter.py
+tests/test_multiprocess_pystata.py
+tests/test_notifications.py
+tests/test_session_manager.py
+tests/test_stop_execution.py
+tests/test_streaming_http.py
+tests/test_timeout_direct.py
