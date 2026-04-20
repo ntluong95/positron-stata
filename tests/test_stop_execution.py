@@ -288,9 +288,9 @@ class TestLogCaptureIsolation(unittest.TestCase):
 
         source = inspect.getsource(worker_process)
 
-        self.assertIn("_get_capture_log_name", source, "Worker should define capture log name helper")
+        self.assertIn("get_capture_log_name", source, "Worker should define capture log name helper")
         self.assertGreaterEqual(
-            source.count("capture_log_name = _get_capture_log_name()"),
+            source.count("capture_log_name = get_capture_log_name()"),
             2,
             "Both execute_stata_code and execute_stata_file should use capture log helper",
         )
