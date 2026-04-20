@@ -57,9 +57,11 @@ Quarto can render Stata and R chunks in the same `.qmd` document. For `quarto pr
 
 ```r
 knitr::opts_chunk$set(
-  engine.path = list(stata = "C:/Program Files/Stata18/StataMP-64.exe")
+  engine.path = list(stata = "/path/to/your/stata-executable")
 )
 ```
+
+Replace the placeholder with your local executable (for example `C:/Program Files/Stata18/StataMP-64.exe` on Windows).
 
 If Quarto execution uses the notebook kernel path (`nbkernel`), this extension now provisions the required Python packages (`nbformat`, `nbclient`) in the managed environment.
 
