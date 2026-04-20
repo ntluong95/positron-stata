@@ -444,6 +444,9 @@ def worker_process(
     # Flag to prevent multiple SetBreak calls - declared here for visibility
     stop_already_sent = False
 
+    def _get_capture_log_name() -> str:
+        return f"_mcp_capture_{worker_id}".replace("-", "_")
+
     def execute_stata_code(code: str, timeout: float = 600.0) -> tuple:
         """
         Execute Stata code with output capture and timeout support.
@@ -487,7 +490,7 @@ def worker_process(
             tempfile.gettempdir(), f"stata_run_{worker_id}_{int(time.time() * 1000)}.log"
         )
         temp_log_stata = temp_log_file.replace("\\", "/")
-        capture_log_name = f"_mcp_capture_{worker_id}".replace("-", "_")
+        capture_log_name = _get_capture_log_name()
 
         try:
             # Wrap code with log commands for reliable output capture
@@ -595,7 +598,7 @@ capture log close {capture_log_name}
             log_dir = os.path.dirname(os.path.abspath(file_path))
             # Include worker_id in log filename to prevent conflicts between parallel sessions
             log_file = os.path.join(log_dir, f"{base_name}_{worker_id}_mcp.log")
-        capture_log_name = f"_mcp_capture_{worker_id}".replace("-", "_")
+        capture_log_name = _get_capture_log_name()
 
         worker_state = WorkerState.BUSY
         # IMPORTANT: Clear stop_event FIRST to prevent race condition with monitor thread

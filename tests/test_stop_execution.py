@@ -288,15 +288,16 @@ class TestLogCaptureIsolation(unittest.TestCase):
 
         source = inspect.getsource(worker_process)
 
-        self.assertIn(
-            "log using \"{temp_log_stata}\", replace text name({capture_log_name})",
-            source,
-            "execute_stata_code should use a named capture log",
+        self.assertIn("_get_capture_log_name", source, "Worker should define capture log name helper")
+        self.assertGreaterEqual(
+            source.count("capture_log_name = _get_capture_log_name()"),
+            2,
+            "Both execute_stata_code and execute_stata_file should use capture log helper",
         )
-        self.assertIn(
-            "log using \"{log_file_stata}\", replace text name({capture_log_name})",
-            source,
-            "execute_stata_file should use a named capture log",
+        self.assertGreaterEqual(
+            source.count("name({capture_log_name})"),
+            2,
+            "Both execute_stata_code and execute_stata_file should use named capture logs",
         )
         self.assertNotIn(
             "capture log close _all",
