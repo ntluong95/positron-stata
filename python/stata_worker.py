@@ -487,13 +487,14 @@ def worker_process(
             tempfile.gettempdir(), f"stata_run_{worker_id}_{int(time.time() * 1000)}.log"
         )
         temp_log_stata = temp_log_file.replace("\\", "/")
+        capture_log_name = f"_mcp_capture_{worker_id}".replace("-", "_")
 
         try:
             # Wrap code with log commands for reliable output capture
-            wrapped_code = f"""capture log close _all
-log using "{temp_log_stata}", replace text
+            wrapped_code = f"""capture log close {capture_log_name}
+log using "{temp_log_stata}", replace text name({capture_log_name})
 {seed_prefix}{code}
-capture log close _all
+capture log close {capture_log_name}
 """
             logging.debug(
                 f"execute_stata_code: Running wrapped code with log file: {temp_log_file}"
@@ -594,6 +595,7 @@ capture log close _all
             log_dir = os.path.dirname(os.path.abspath(file_path))
             # Include worker_id in log filename to prevent conflicts between parallel sessions
             log_file = os.path.join(log_dir, f"{base_name}_{worker_id}_mcp.log")
+        capture_log_name = f"_mcp_capture_{worker_id}".replace("-", "_")
 
         worker_state = WorkerState.BUSY
         # IMPORTANT: Clear stop_event FIRST to prevent race condition with monitor thread
@@ -634,12 +636,12 @@ capture log close _all
             # CRITICAL: Embed seed directly in wrapped code to ensure it's set reliably
             # This avoids race conditions from separate stata.run() calls that might fail silently
             # NOTE: cd to .do file's directory so outputs go there (log file location is separate)
-            wrapped_code = f"""capture log close _all
+            wrapped_code = f"""capture log close {capture_log_name}
                                 set seed {seed_hash}
                                 cd "{do_file_dir}"
-                                log using "{log_file_stata}", replace text
+                                log using "{log_file_stata}", replace text name({capture_log_name})
                                 {original_code}
-                                capture log close _all
+                                capture log close {capture_log_name}
                                 """
 
             # Execute with output capture

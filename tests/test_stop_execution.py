@@ -279,6 +279,32 @@ class TestStopEventClearing(unittest.TestCase):
                         "stop_event.clear() should come BEFORE cancelled = False")
 
 
+class TestLogCaptureIsolation(unittest.TestCase):
+    """Ensure MCP output capture doesn't block user-managed logs."""
+
+    def test_capture_log_uses_named_log(self):
+        import inspect
+        from stata_worker import worker_process
+
+        source = inspect.getsource(worker_process)
+
+        self.assertIn(
+            "log using \"{temp_log_stata}\", replace text name({capture_log_name})",
+            source,
+            "execute_stata_code should use a named capture log",
+        )
+        self.assertIn(
+            "log using \"{log_file_stata}\", replace text name({capture_log_name})",
+            source,
+            "execute_stata_file should use a named capture log",
+        )
+        self.assertNotIn(
+            "capture log close _all",
+            source,
+            "Worker capture wrapper should not close all user logs",
+        )
+
+
 class TestMonitorThreadErrorHandling(unittest.TestCase):
     """
     Test for monitor thread error handling fix.
