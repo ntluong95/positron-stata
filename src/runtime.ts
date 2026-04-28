@@ -30,7 +30,7 @@ function loadRuntimeIconSvg(extensionPath: string): string | undefined {
     extensionPath,
     "resources",
     "branding",
-    "stata.svg",
+    "stata~-1758089562.svg",
   );
   try {
     const svg = fs.readFileSync(iconPath, "utf8").trim();
