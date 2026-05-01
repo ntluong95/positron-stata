@@ -79,6 +79,7 @@ interface SessionStartupCommand {
   command: string;
   args: string[];
   description: string;
+  runAfterStart?: boolean;
 }
 
 function formatSessionStartupCommand(command: SessionStartupCommand): string {
@@ -333,7 +334,7 @@ export class StataSession
     this._stateEmitter.fire(positron.RuntimeState.Initializing);
     this._stateEmitter.fire(positron.RuntimeState.Starting);
 
-    await this.runSessionStartupCommands();
+    await this.runSessionStartupCommands("before");
 
     await this._serverManager.ensureStarted(this._installation);
 
@@ -345,6 +346,9 @@ export class StataSession
 
     this._stateEmitter.fire(positron.RuntimeState.Ready);
     this._stateEmitter.fire(positron.RuntimeState.Idle);
+
+    await this.runSessionStartupCommands("after");
+
     return this._runtimeInfo;
   }
 
@@ -1025,6 +1029,7 @@ export class StataSession
             command: "sudo",
             args: ["-n", "systemsetup", "-setusingnetworktime", "on"],
             description: "enable network time",
+            runAfterStart: true,
           },
         ];
       case "linux":
@@ -1043,6 +1048,7 @@ export class StataSession
             command: "sudo",
             args: ["-n", "timedatectl", "set-ntp", "true"],
             description: "enable network time",
+            runAfterStart: true,
           },
         ];
       case "win32":
@@ -1076,6 +1082,7 @@ export class StataSession
               "Start-Service -Name w32time -ErrorAction Stop",
             ],
             description: "enable Windows time service",
+            runAfterStart: true,
           },
         ];
       default:
@@ -1083,18 +1090,23 @@ export class StataSession
     }
   }
 
-  private async runSessionStartupCommands(): Promise<void> {
+  private async runSessionStartupCommands(
+    phase: "before" | "after" = "before",
+  ): Promise<void> {
     if (!getStataConfiguration().startupTimeCommandsEnabled) {
       return;
     }
 
-    const commands = this.getSessionStartupCommands();
+    const allCommands = this.getSessionStartupCommands();
+    const commands = allCommands.filter((c) =>
+      phase === "after" ? c.runAfterStart === true : !c.runAfterStart,
+    );
     if (commands.length === 0) {
       return;
     }
 
     this._serverManager.logInfo(
-      `[session-startup] Running ${commands.length} startup time command(s) for ${process.platform}.`,
+      `[session-startup] Running ${commands.length} ${phase}-start command(s) for ${process.platform}.`,
     );
 
     for (const command of commands) {
@@ -1117,7 +1129,7 @@ export class StataSession
     }
 
     this._serverManager.logInfo(
-      "[session-startup] Startup time command sequence completed.",
+      `[session-startup] ${phase}-start command sequence completed.`,
     );
   }
 
