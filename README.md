@@ -50,6 +50,21 @@ Command history panel that preserves executed commands and can re-run or send co
 
 Preview of Stata output embedded inline in Quarto (.qmd) documents — rendered code results and plots appear directly alongside narrative text.
 
+Quarto can render Stata and R chunks in the same `.qmd` document. For `quarto preview/render` via knitr, ensure the Stata command is resolvable:
+
+- Add your Stata executable to `PATH` as `stata`, **or**
+- Set the knitr engine path explicitly:
+
+```r
+knitr::opts_chunk$set(
+  engine.path = list(stata = "/path/to/your/stata-executable")
+)
+```
+
+Replace the placeholder with your local executable (for example `C:/Program Files/Stata18/StataMP-64.exe` on Windows).
+
+If Quarto execution uses the notebook kernel path (`nbkernel`), this extension now provisions the required Python packages (`nbformat`, `nbclient`) in the managed environment.
+
 ## Requirements
 
 - Positron IDE with extension API support compatible with VS Code `^1.99.0`
