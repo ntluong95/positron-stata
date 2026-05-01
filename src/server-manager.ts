@@ -9,7 +9,7 @@ import { StataServerClient } from "./server-client";
 import { StataInstallation } from "./stata-installation";
 
 const HEALTH_POLL_INTERVAL_MS = 500;
-const HEALTH_TIMEOUT_MS = 120000;
+const HEALTH_TIMEOUT_MS = 30000;
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
