@@ -346,9 +346,6 @@ export class StataSession
 
     this._stateEmitter.fire(positron.RuntimeState.Ready);
     this._stateEmitter.fire(positron.RuntimeState.Idle);
-
-    await this.runSessionStartupCommands("after");
-
     return this._runtimeInfo;
   }
 
@@ -647,6 +644,7 @@ export class StataSession
     await this.interrupt().catch(() => undefined);
     const client = await this.ensureClient();
     await client.destroySession(this.metadata.sessionId).catch(() => undefined);
+    await this.runSessionStartupCommands("after");
     this._stateEmitter.fire(positron.RuntimeState.Exited);
     this._exitEmitter.fire({
       runtime_name: this.runtimeMetadata.runtimeName,
