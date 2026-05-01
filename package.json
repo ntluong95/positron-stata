@@ -369,7 +369,7 @@
         "positron.stata.sessionStartup.timeCommands.enabled": {
           "type": "boolean",
           "default": false,
-          "description": "Run startup system commands before Stata runtime session.",
+          "description": "Run session time commands around Stata startup and worker communication.",
           "included": false
         }
       }

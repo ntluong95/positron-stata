@@ -295,6 +295,8 @@ export class StataSession
   private _lastReportedWorkingDirectory: string | undefined;
   private _executionCount = 0;
   private _variablesVersion = 0;
+  private _sessionTimeCommandDepth = 0;
+  private _sessionTimeCommandQueue: Promise<void> = Promise.resolve();
   private readonly _dataExplorers = new Map<string, StataDataExplorer>();
   private _activeDataExplorer: StataDataExplorer | undefined;
   private readonly _helpServer = new StataHelpServer();
@@ -334,9 +336,9 @@ export class StataSession
     this._stateEmitter.fire(positron.RuntimeState.Initializing);
     this._stateEmitter.fire(positron.RuntimeState.Starting);
 
-    await this.runSessionStartupCommands("before");
-
-    await this._serverManager.ensureStarted(this._installation);
+    await this.withSessionTimeCommands("session startup", async () => {
+      await this._serverManager.ensureStarted(this._installation);
+    });
 
     this._runtimeInfo = {
       banner: this.buildStartupBanner(),
@@ -361,7 +363,6 @@ export class StataSession
   async runFile(filePath: string): Promise<void> {
     const executionId = randomUUID();
     const configuration = getStataConfiguration();
-    const client = await this.ensureClient();
     const suppressGraphEcho =
       getStataConfiguration().autoDisplayGraphs &&
       this.fileContainsGraphCommand(filePath);
@@ -378,46 +379,49 @@ export class StataSession
     let fullOutput = "";
     let workingDirectoryChanged = false;
     try {
-      const request = client.runFileStream(
-        filePath,
-        configuration.runFileTimeout,
-        this.metadata.sessionId,
-        workingDirectory,
-        (message) => {
-          fullOutput += `${message}\n`;
-          if (
-            !isStatusLine(message) &&
-            !isGraphMetadataLine(message) &&
-            message.trim().length > 0 &&
-            !(suppressGraphEcho && isGraphEchoLine(message))
-          ) {
-            this.emitStream(
-              executionId,
-              `${message}\n`,
-              message.startsWith("ERROR:")
-                ? positron.LanguageRuntimeStreamName.Stderr
-                : positron.LanguageRuntimeStreamName.Stdout,
-            );
-          }
-        },
-      );
-      this._activeRequest = { executionId, request };
-      await request.completion;
-      if (workingDirectory) {
-        this._workingDirectory = workingDirectory;
-        workingDirectoryChanged = true;
-      }
-      this.updateLatestTableCache(fullOutput);
-      await this.emitGraphsIfNeeded(executionId, fullOutput);
-      if (fullOutput.trim().length === 0) {
-        this._serverManager.logWarning(
-          `[runtime] run_file completed with no stream output: ${filePath}`,
+      await this.withSessionTimeCommands(`run_file:${filePath}`, async () => {
+        const client = await this.ensureClient();
+        const request = client.runFileStream(
+          filePath,
+          configuration.runFileTimeout,
+          this.metadata.sessionId,
+          workingDirectory,
+          (message) => {
+            fullOutput += `${message}\n`;
+            if (
+              !isStatusLine(message) &&
+              !isGraphMetadataLine(message) &&
+              message.trim().length > 0 &&
+              !(suppressGraphEcho && isGraphEchoLine(message))
+            ) {
+              this.emitStream(
+                executionId,
+                `${message}\n`,
+                message.startsWith("ERROR:")
+                  ? positron.LanguageRuntimeStreamName.Stderr
+                  : positron.LanguageRuntimeStreamName.Stdout,
+              );
+            }
+          },
         );
-      } else {
-        this._serverManager.logInfo(
-          `[runtime] run_file completed: ${filePath}`,
-        );
-      }
+        this._activeRequest = { executionId, request };
+        await request.completion;
+        if (workingDirectory) {
+          this._workingDirectory = workingDirectory;
+          workingDirectoryChanged = true;
+        }
+        this.updateLatestTableCache(fullOutput);
+        await this.emitGraphsIfNeeded(executionId, fullOutput);
+        if (fullOutput.trim().length === 0) {
+          this._serverManager.logWarning(
+            `[runtime] run_file completed with no stream output: ${filePath}`,
+          );
+        } else {
+          this._serverManager.logInfo(
+            `[runtime] run_file completed: ${filePath}`,
+          );
+        }
+      });
     } catch (error) {
       if (isStreamAbortError(error)) {
         this.emitStream(
@@ -471,10 +475,15 @@ export class StataSession
   }
 
   async testConnection(): Promise<string> {
-    const client = await this.ensureClient();
-    const output = await client.runSelectionText(
-      'display "Hello from Positron PyStata Server!"',
-      this.metadata.sessionId,
+    const output = await this.withSessionTimeCommands(
+      "test_connection",
+      async () => {
+        const client = await this.ensureClient();
+        return client.runSelectionText(
+          'display "Hello from Positron PyStata Server!"',
+          this.metadata.sessionId,
+        );
+      },
     );
     return output.trim();
   }
@@ -618,8 +627,12 @@ export class StataSession
       return;
     }
 
-    const client = await this.ensureClient();
-    await client.stopExecution(this.metadata.sessionId).catch(() => undefined);
+    await this.withSessionTimeCommands("stop_execution", async () => {
+      const client = await this.ensureClient();
+      await client.stopExecution(this.metadata.sessionId).catch(
+        () => undefined,
+      );
+    });
     activeRequest.request.abort();
   }
 
@@ -630,8 +643,12 @@ export class StataSession
 
     this._stateEmitter.fire(positron.RuntimeState.Restarting);
     await this.interrupt().catch(() => undefined);
-    const client = await this.ensureClient();
-    await client.destroySession(this.metadata.sessionId).catch(() => undefined);
+    await this.withSessionTimeCommands("session restart", async () => {
+      const client = await this.ensureClient();
+      await client
+        .destroySession(this.metadata.sessionId)
+        .catch(() => undefined);
+    });
     this._stateEmitter.fire(positron.RuntimeState.Ready);
     this._stateEmitter.fire(positron.RuntimeState.Idle);
     await this.pollWorkingDirectory(true);
@@ -642,9 +659,12 @@ export class StataSession
     exitReason = positron.RuntimeExitReason.Shutdown,
   ): Promise<void> {
     await this.interrupt().catch(() => undefined);
-    const client = await this.ensureClient();
-    await client.destroySession(this.metadata.sessionId).catch(() => undefined);
-    await this.runSessionStartupCommands("after");
+    await this.withSessionTimeCommands("session shutdown", async () => {
+      const client = await this.ensureClient();
+      await client
+        .destroySession(this.metadata.sessionId)
+        .catch(() => undefined);
+    });
     this._stateEmitter.fire(positron.RuntimeState.Exited);
     this._exitEmitter.fire({
       runtime_name: this.runtimeMetadata.runtimeName,
@@ -751,75 +771,80 @@ export class StataSession
     let workingDirectoryChanged = false;
 
     try {
-      const helpTopic = parseHelpCommand(trimmed);
-      if (helpTopic) {
-        await this.showHelpInternal(helpTopic, executionId);
-        return;
-      }
-
-      const browseFilter = parseBrowseCommand(trimmed);
-      if (browseFilter !== null) {
-        await this.openDataExplorer(
-          browseFilter || undefined,
-          executionId,
-          DATASET_VARIABLE_PATH,
-        );
-        return;
-      }
-
-      const configuration = getStataConfiguration();
-      const client = await this.ensureClient();
-      const suppressGraphEcho =
-        configuration.autoDisplayGraphs && containsGraphCommand(code);
-      let fullOutput = "";
-      const echoFilter = new SelectionEchoFilter(code);
-      const request = client.runSelectionStream(
-        code,
-        configuration.runSelectionTimeout,
-        this.metadata.sessionId,
-        this._workingDirectory,
-        (message) => {
-          fullOutput += `${message}\n`;
-          const visibleMessage = echoFilter.consume(message);
-          if (
-            !visibleMessage ||
-            isStatusLine(visibleMessage) ||
-            isGraphMetadataLine(visibleMessage) ||
-            (suppressGraphEcho && isGraphEchoLine(visibleMessage)) ||
-            mode === positron.RuntimeCodeExecutionMode.Silent
-          ) {
+      await this.withSessionTimeCommands(
+        `run_selection:${codePreview}`,
+        async () => {
+          const helpTopic = parseHelpCommand(trimmed);
+          if (helpTopic) {
+            await this.showHelpInternal(helpTopic, executionId);
             return;
           }
-          this.emitStream(
-            executionId,
-            `${visibleMessage}\n`,
-            visibleMessage.startsWith("ERROR:")
-              ? positron.LanguageRuntimeStreamName.Stderr
-              : positron.LanguageRuntimeStreamName.Stdout,
+
+          const browseFilter = parseBrowseCommand(trimmed);
+          if (browseFilter !== null) {
+            await this.openDataExplorer(
+              browseFilter || undefined,
+              executionId,
+              DATASET_VARIABLE_PATH,
+            );
+            return;
+          }
+
+          const configuration = getStataConfiguration();
+          const client = await this.ensureClient();
+          const suppressGraphEcho =
+            configuration.autoDisplayGraphs && containsGraphCommand(code);
+          let fullOutput = "";
+          const echoFilter = new SelectionEchoFilter(code);
+          const request = client.runSelectionStream(
+            code,
+            configuration.runSelectionTimeout,
+            this.metadata.sessionId,
+            this._workingDirectory,
+            (message) => {
+              fullOutput += `${message}\n`;
+              const visibleMessage = echoFilter.consume(message);
+              if (
+                !visibleMessage ||
+                isStatusLine(visibleMessage) ||
+                isGraphMetadataLine(visibleMessage) ||
+                (suppressGraphEcho && isGraphEchoLine(visibleMessage)) ||
+                mode === positron.RuntimeCodeExecutionMode.Silent
+              ) {
+                return;
+              }
+              this.emitStream(
+                executionId,
+                `${visibleMessage}\n`,
+                visibleMessage.startsWith("ERROR:")
+                  ? positron.LanguageRuntimeStreamName.Stderr
+                  : positron.LanguageRuntimeStreamName.Stdout,
+              );
+            },
           );
+
+          this._activeRequest = { executionId, request };
+          await request.completion;
+          const changedDirectory = this.resolveWorkingDirectoryTarget(
+            parseChangeDirectoryCommand(code),
+          );
+          if (changedDirectory) {
+            this._workingDirectory = changedDirectory;
+            workingDirectoryChanged = true;
+          }
+          this.updateLatestTableCache(fullOutput);
+          await this.emitGraphsIfNeeded(executionId, fullOutput);
+          if (fullOutput.trim().length === 0) {
+            this._serverManager.logWarning(
+              `[runtime] run_selection completed with no stream output: ${codePreview}`,
+            );
+          } else {
+            this._serverManager.logInfo(
+              `[runtime] run_selection completed: ${codePreview}`,
+            );
+          }
         },
       );
-
-      this._activeRequest = { executionId, request };
-      await request.completion;
-      const changedDirectory = this.resolveWorkingDirectoryTarget(
-        parseChangeDirectoryCommand(code),
-      );
-      if (changedDirectory) {
-        this._workingDirectory = changedDirectory;
-        workingDirectoryChanged = true;
-      }
-      this.updateLatestTableCache(fullOutput);
-      await this.emitGraphsIfNeeded(executionId, fullOutput);
-      if (fullOutput.trim().length === 0) {
-        this._serverManager.logWarning(
-          `[runtime] run_selection completed with no stream output: ${codePreview}`,
-        );
-      } else {
-        this._serverManager.logInfo(
-          `[runtime] run_selection completed: ${codePreview}`,
-        );
-      }
     } catch (error) {
       if (isStreamAbortError(error)) {
         this.emitStream(
@@ -1090,6 +1115,7 @@ export class StataSession
 
   private async runSessionStartupCommands(
     phase: "before" | "after" = "before",
+    reason?: string,
   ): Promise<void> {
     if (!getStataConfiguration().startupTimeCommandsEnabled) {
       return;
@@ -1103,8 +1129,9 @@ export class StataSession
       return;
     }
 
+    const reasonSuffix = reason ? ` for ${reason}` : "";
     this._serverManager.logInfo(
-      `[session-startup] Running ${commands.length} ${phase}-start command(s) for ${process.platform}.`,
+      `[session-startup] Running ${commands.length} ${phase}-start command(s) for ${process.platform}${reasonSuffix}.`,
     );
 
     for (const command of commands) {
@@ -1127,8 +1154,69 @@ export class StataSession
     }
 
     this._serverManager.logInfo(
-      `[session-startup] ${phase}-start command sequence completed.`,
+      `[session-startup] ${phase}-start command sequence completed${reasonSuffix}.`,
     );
+  }
+
+  private async withSessionTimeCommands<T>(
+    reason: string,
+    action: () => Promise<T>,
+  ): Promise<T> {
+    if (!getStataConfiguration().startupTimeCommandsEnabled) {
+      return action();
+    }
+
+    await this.acquireSessionTimeCommands(reason);
+    try {
+      return await action();
+    } finally {
+      await this.releaseSessionTimeCommands(reason);
+    }
+  }
+
+  private async acquireSessionTimeCommands(reason: string): Promise<void> {
+    await this.enqueueSessionTimeCommandChange(async () => {
+      this._sessionTimeCommandDepth += 1;
+      if (this._sessionTimeCommandDepth > 1) {
+        this._serverManager.logInfo(
+          `[session-startup] Reusing active time override for ${reason} (depth=${this._sessionTimeCommandDepth}).`,
+        );
+        return;
+      }
+      await this.runSessionStartupCommands("before", reason);
+    });
+  }
+
+  private async releaseSessionTimeCommands(reason: string): Promise<void> {
+    await this.enqueueSessionTimeCommandChange(async () => {
+      if (this._sessionTimeCommandDepth === 0) {
+        this._serverManager.logWarning(
+          `[session-startup] Ignoring unmatched time override release for ${reason}.`,
+        );
+        return;
+      }
+
+      this._sessionTimeCommandDepth -= 1;
+      if (this._sessionTimeCommandDepth > 0) {
+        this._serverManager.logInfo(
+          `[session-startup] Keeping time override active after ${reason} (depth=${this._sessionTimeCommandDepth}).`,
+        );
+        return;
+      }
+
+      await this.runSessionStartupCommands("after", reason);
+    });
+  }
+
+  private async enqueueSessionTimeCommandChange(
+    action: () => Promise<void>,
+  ): Promise<void> {
+    const pending = this._sessionTimeCommandQueue.then(action, action);
+    this._sessionTimeCommandQueue = pending.then(
+      () => undefined,
+      () => undefined,
+    );
+    await pending;
   }
 
   private showSessionStartupCommandWarning(
@@ -1142,7 +1230,7 @@ export class StataSession
 
     const detail = error instanceof Error ? error.message : String(error);
     void vscode.window.showWarningMessage(
-      `Could not run startup time command (${command.description}). ${detail}. Stata session startup will continue.`,
+      `Could not run session time command (${command.description}). ${detail}. Stata session startup will continue.`,
     );
   }
 
@@ -1259,11 +1347,12 @@ export class StataSession
 
   private async fetchDatasetMetadata(): Promise<DataViewResponse | undefined> {
     try {
-      const client = await this.ensureClient();
-      const response = await client.getData(
-        undefined,
-        100,
-        this.metadata.sessionId,
+      const response = await this.withSessionTimeCommands(
+        "dataset metadata refresh",
+        async () => {
+          const client = await this.ensureClient();
+          return client.getData(undefined, 100, this.metadata.sessionId);
+        },
       );
       if (response.status !== "success") {
         return undefined;
@@ -1370,10 +1459,12 @@ export class StataSession
   }
 
   private async clearVariables(_params?: VariablesClearParams): Promise<void> {
-    const client = await this.ensureClient();
-    const response = await client.runSelectionText(
-      "clear all",
-      this.metadata.sessionId,
+    const response = await this.withSessionTimeCommands(
+      "clear_variables",
+      async () => {
+        const client = await this.ensureClient();
+        return client.runSelectionText("clear all", this.metadata.sessionId);
+      },
     );
 
     if (/^ERROR:/m.test(response)) {
@@ -1706,8 +1797,10 @@ export class StataSession
     topic: string,
     _parentId: string,
   ): Promise<void> {
-    const client = await this.ensureClient();
-    const html = await client.getHelpHtml(topic);
+    const html = await this.withSessionTimeCommands(`help:${topic}`, async () => {
+      const client = await this.ensureClient();
+      return client.getHelpHtml(topic);
+    });
 
     // Find a Help comm client to send the content to
     const helpClientId = this.findClientByType(positron.RuntimeClientType.Help);
@@ -1757,11 +1850,16 @@ export class StataSession
     variablePath?: string[],
   ): Promise<void> {
     const configuration = getStataConfiguration();
-    const client = await this.ensureClient();
-    const response = await client.getData(
-      filter,
-      configuration.dataViewerMaxRows,
-      this.metadata.sessionId,
+    const response = await this.withSessionTimeCommands(
+      filter ? `browse:${filter}` : "browse",
+      async () => {
+        const client = await this.ensureClient();
+        return client.getData(
+          filter,
+          configuration.dataViewerMaxRows,
+          this.metadata.sessionId,
+        );
+      },
     );
     if (response.status === "error") {
       throw new Error(response.message || "Stata data viewer request failed");
@@ -1892,8 +1990,13 @@ export class StataSession
       }
 
       try {
-        const client = await this.ensureClient();
-        const html = await client.getHelpHtml(topic);
+        const html = await this.withSessionTimeCommands(
+          `help:${topic}`,
+          async () => {
+            const client = await this.ensureClient();
+            return client.getHelpHtml(topic);
+          },
+        );
         // Start the local help HTTP server and publish the page
         await this._helpServer.start();
         const url = this._helpServer.publish(topic, html);
