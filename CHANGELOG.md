@@ -2,6 +2,10 @@
 
 All notable changes to `positron-stata` are documented in this file.
 
+## 0.1.2
+- Add a new logo session for stata
+- Add a Outline toggle icon  
+
 ## 0.1.1
 - Fix text in the console are not well-aligned
 
