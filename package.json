@@ -45,7 +45,8 @@
     "onCommand:positronStata.restartSession",
     "onCommand:positronStata.testServerConnection",
     "onCommand:positronStata.showLogs",
-    "onCommand:positronStata.copyLastTable"
+    "onCommand:positronStata.copyLastTable",
+    "onCommand:positronStata.toggleOutline"
   ],
   "contributes": {
     "languageRuntimes": [
@@ -149,6 +150,16 @@
         "command": "positronStata.copyLastTable",
         "category": "Stata",
         "title": "Copy Last Output Table"
+      },
+      {
+        "command": "positronStata.toggleOutline",
+        "title": "Toggle Outline",
+        "category": "Stata",
+        "icon": "$(list-unordered)",
+        "actionBarOptions": {
+          "controlType": "button",
+          "displayTitle": false
+        }
       }
     ],
     "menus": {
@@ -178,6 +189,13 @@
           "command": "positronStata.runSection",
           "group": "navigation",
           "order": 1
+        }
+      ],
+      "editor/actions/left": [
+        {
+          "command": "positronStata.toggleOutline",
+          "when": "editorLangId == stata || resourceExtname == .do || resourceExtname == .ado || resourceExtname == .doh || resourceExtname == .mata",
+          "group": "navigation@45"
         }
       ],
       "editor/context": [

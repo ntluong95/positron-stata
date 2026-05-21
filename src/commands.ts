@@ -10,6 +10,8 @@ import { getStataSectionRange } from './stata-sections';
 import { getNextStataExecutablePosition, getStataBlockBounds } from './stata-selection';
 import { StataVariableManager } from './variable-manager';
 
+let isOutlineVisible = false;
+
 interface EditorCommandTarget {
 	code: string;
 	endLine: number;
@@ -337,6 +339,18 @@ export function registerCommands(
 			}
 
 			vscode.window.showInformationMessage('Copied latest Stata table as tab-delimited text.');
+		}),
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand('positronStata.toggleOutline', async () => {
+			if (isOutlineVisible) {
+				await vscode.commands.executeCommand('outline.removeView');
+				isOutlineVisible = false;
+			} else {
+				await vscode.commands.executeCommand('outline.focus');
+				isOutlineVisible = true;
+			}
 		}),
 	);
 }
