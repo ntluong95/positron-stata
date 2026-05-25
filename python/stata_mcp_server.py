@@ -131,6 +131,12 @@ logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
 SERVER_NAME = "Stata MCP Server"
 SERVER_VERSION = "0.4.1"
 
+# Named log slot used by the single-session/legacy MCP capture path.
+# Keeping this in a *named* slot lets user code use the unnamed `log using`
+# slot without hitting `log file already open` (issue #8). The worker-process
+# path (python/stata_worker.py) uses its own per-worker named log.
+MCP_CAPTURE_LOG_NAME = "_mcp_capture"
+
 # Flag for Stata availability
 stata_available = False
 has_stata = False
@@ -911,9 +917,12 @@ def run_stata_command(
             with tempfile.NamedTemporaryFile(
                 suffix=".do", delete=False, mode="w", encoding="utf-8"
             ) as f:
-                # Write the command to the file
-                f.write(f"capture log close _all\n")
-                f.write(f'log using "{f.name}.log", replace text\n')
+                # Use a named capture log so the unnamed log slot stays free for
+                # user `log using` commands (issue #8).
+                f.write(f"capture log close {MCP_CAPTURE_LOG_NAME}\n")
+                f.write(
+                    f'log using "{f.name}.log", replace text name({MCP_CAPTURE_LOG_NAME})\n'
+                )
 
                 # Process command line by line to comment out cls commands
                 cls_commands_found = 0
@@ -943,7 +952,7 @@ def run_stata_command(
                     # Normal commands don't need special treatment
                     f.write(f"{processed_command}")
 
-                f.write(f"capture log close\n")
+                f.write(f"capture log close {MCP_CAPTURE_LOG_NAME}\n")
                 do_file = f.name
 
             # Execute the do file with echo=False to completely silence Stata output to console
@@ -1587,8 +1596,8 @@ def run_stata_file(
             with tempfile.NamedTemporaryFile(
                 suffix=".do", delete=False, mode="w", encoding="utf-8"
             ) as temp_do:
-                # First close any existing log files
-                temp_do.write(f"capture log close _all\n")
+                # Close only our own named capture log (preserves user logs)
+                temp_do.write(f"capture log close {MCP_CAPTURE_LOG_NAME}\n")
                 # Change working directory based on working_dir parameter
                 # If working_dir is None, default to .do file's directory (like native Stata)
                 # Otherwise, cd to the specified directory
@@ -1600,14 +1609,15 @@ def run_stata_file(
                 logging.info(f"Setting working directory to: {wd}")
                 # Note: _gr_list on is enabled externally before .do file execution
                 # Note: Graph names are auto-injected above into modified_content
-                # Then add our own log command with absolute path
-                # Use forward slashes for Stata commands to avoid escape sequence issues on Windows
+                # Use a named log so user-managed `log using` keeps the unnamed slot (issue #8)
                 log_file_stata = custom_log_file.replace("\\", "/")
-                temp_do.write(f'log using "{log_file_stata}", replace text\n')
+                temp_do.write(
+                    f'log using "{log_file_stata}", replace text name({MCP_CAPTURE_LOG_NAME})\n'
+                )
                 temp_do.write(modified_content)
                 temp_do.write(
-                    f"\ncapture log close _all\n"
-                )  # Ensure all logs are closed at the end
+                    f"\ncapture log close {MCP_CAPTURE_LOG_NAME}\n"
+                )
                 # Note: We intentionally do NOT disable _gr_list so graphs persist for detection
                 modified_do_file = temp_do.name
 

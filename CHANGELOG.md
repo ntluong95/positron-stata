@@ -2,6 +2,9 @@
 
 All notable changes to `positron-stata` are documented in this file.
 
+## Unreleased
+- Fix `log file already open` (r(604)) when user code opens its own `log using` (issue #8). The MCP output capture now uses a dedicated named log slot in both the worker and the legacy single-session paths, so user-managed unnamed logs no longer collide with extension logging. Teardown closes only the MCP capture log; user logs are left untouched.
+
 ## 0.1.1
 - Fix text in the console are not well-aligned
 

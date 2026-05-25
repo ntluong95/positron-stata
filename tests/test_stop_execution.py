@@ -279,6 +279,116 @@ class TestStopEventClearing(unittest.TestCase):
                         "stop_event.clear() should come BEFORE cancelled = False")
 
 
+class TestLogCaptureIsolation(unittest.TestCase):
+    """Regression coverage for issue #8: MCP wrapper must not block
+    user-managed `log using` commands. We test the pure wrapping helpers
+    directly so the assertions describe *generated Stata code*, not the
+    Python source layout."""
+
+    def test_capture_log_name_is_scoped_to_worker(self):
+        from stata_worker import get_capture_log_name
+
+        self.assertEqual(get_capture_log_name("abcd1234"), "_mcp_capture_abcd1234")
+
+    def test_capture_log_name_sanitizes_hyphens(self):
+        """Worker ids that contain hyphens (full UUIDs) must still produce a
+        Stata-valid name (letters/digits/underscores, starts with _)."""
+        from stata_worker import get_capture_log_name
+
+        name = get_capture_log_name("11111111-2222-3333-4444-555555555555")
+        self.assertNotIn("-", name)
+        self.assertTrue(name.startswith("_"))
+        # Stata names allow only [A-Za-z0-9_]
+        import re as _re
+
+        self.assertRegex(name, r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+    def test_execute_code_wrapper_uses_named_log(self):
+        from stata_worker import build_execute_code_wrapper, get_capture_log_name
+
+        name = get_capture_log_name("abcd1234")
+        wrapped = build_execute_code_wrapper(
+            code="display 1",
+            temp_log_stata="/tmp/run.log",
+            capture_log_name=name,
+            seed_prefix="quietly set seed 42\n",
+        )
+        self.assertIn(f"log using \"/tmp/run.log\", replace text name({name})", wrapped)
+        self.assertIn(f"capture log close {name}", wrapped)
+        self.assertNotIn("capture log close _all", wrapped)
+        # User code and seed must be present and in the right order
+        self.assertLess(wrapped.index("set seed 42"), wrapped.index("display 1"))
+        # Open precedes user code precedes close
+        open_idx = wrapped.index("log using")
+        close_idx = wrapped.rindex(f"capture log close {name}")
+        self.assertLess(open_idx, wrapped.index("display 1"))
+        self.assertLess(wrapped.index("display 1"), close_idx)
+
+    def test_execute_file_wrapper_uses_named_log(self):
+        from stata_worker import build_execute_file_wrapper, get_capture_log_name
+
+        name = get_capture_log_name("abcd1234")
+        wrapped = build_execute_file_wrapper(
+            original_code="display 2",
+            log_file_stata="/tmp/run.log",
+            capture_log_name=name,
+            seed_hash=12345,
+            do_file_dir="/tmp/dir",
+        )
+        self.assertIn(f"log using \"/tmp/run.log\", replace text name({name})", wrapped)
+        self.assertIn(f"capture log close {name}", wrapped)
+        self.assertNotIn("capture log close _all", wrapped)
+        self.assertIn('cd "/tmp/dir"', wrapped)
+        self.assertIn("set seed 12345", wrapped)
+
+    def test_user_log_using_would_not_collide_with_capture_name(self):
+        """The capture log name uses a `_mcp_capture_` prefix that user code
+        is extremely unlikely to pick, and lives in a *named* slot, so a user
+        `log using "x.log", replace` (unnamed slot) cannot conflict."""
+        from stata_worker import build_execute_code_wrapper, get_capture_log_name
+
+        name = get_capture_log_name("abcd1234")
+        wrapped = build_execute_code_wrapper(
+            code='log using "user.log", replace text\ndisplay 1\nlog close',
+            temp_log_stata="/tmp/run.log",
+            capture_log_name=name,
+            seed_prefix="",
+        )
+        # Wrapper opens its named log, then user code opens the unnamed slot.
+        # Both can coexist in Stata, so the wrapper should not have closed _all.
+        self.assertNotIn("_all", wrapped)
+        self.assertIn(f"name({name})", wrapped)
+        self.assertIn('log using "user.log"', wrapped)
+
+    def test_legacy_server_uses_named_capture_log(self):
+        """The single-session legacy path in stata_mcp_server.py must also use
+        a named capture log. We parse the source instead of importing because
+        the module has heavy runtime deps (pydantic/fastapi) that are not
+        required to verify this invariant."""
+        import re as _re
+
+        server_path = os.path.join(
+            os.path.dirname(__file__), '..', 'python', 'stata_mcp_server.py'
+        )
+        with open(server_path, 'r', encoding='utf-8') as fh:
+            source = fh.read()
+
+        match = _re.search(
+            r'^MCP_CAPTURE_LOG_NAME\s*=\s*["\']([^"\']+)["\']', source, _re.MULTILINE
+        )
+        self.assertIsNotNone(match, "stata_mcp_server must define MCP_CAPTURE_LOG_NAME")
+        name = match.group(1)
+        self.assertTrue(name.startswith("_"))
+        self.assertRegex(name, r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+        # Every `log using` written into a temp do-file must use a named log,
+        # and the only `capture log close _all` allowed is in the explicit
+        # `_single_session_restart` reset path.
+        for m in _re.finditer(r'log using "[^"]+", replace text(?:\s+name\([^)]+\))?', source):
+            self.assertIn("name(", m.group(0),
+                          f"Unnamed log used in stata_mcp_server: {m.group(0)!r}")
+
+
 class TestMonitorThreadErrorHandling(unittest.TestCase):
     """
     Test for monitor thread error handling fix.

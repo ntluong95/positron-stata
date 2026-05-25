@@ -45,6 +45,57 @@ def deduplicate_break_messages(output: str) -> str:
     return re.sub(r"(--Break--\s*\n\s*r\(1\);\s*\n?)+", "--Break--\nr(1);\n", output)
 
 
+def get_capture_log_name(worker_id: str) -> str:
+    """Build a Stata-valid named-log identifier scoped to this worker.
+
+    The MCP output capture must live in a *named* log slot so user code is free
+    to use the unnamed slot (issue #8). Stata log names allow [A-Za-z0-9_] and
+    must start with a letter or underscore; we sanitize the worker_id so any
+    hyphens (e.g. if a UUID is ever passed in full) become underscores.
+    """
+    return f"_mcp_capture_{worker_id}".replace("-", "_")
+
+
+def build_execute_code_wrapper(
+    code: str, temp_log_stata: str, capture_log_name: str, seed_prefix: str = ""
+) -> str:
+    """Wrap user Stata code with a *named* MCP capture log.
+
+    Using `name(...)` keeps the unnamed log slot available for user-managed
+    `log using` commands, and the cleanup only closes the named log so user
+    logs survive teardown.
+    """
+    return (
+        f"capture log close {capture_log_name}\n"
+        f'log using "{temp_log_stata}", replace text name({capture_log_name})\n'
+        f"{seed_prefix}{code}\n"
+        f"capture log close {capture_log_name}\n"
+    )
+
+
+def build_execute_file_wrapper(
+    original_code: str,
+    log_file_stata: str,
+    capture_log_name: str,
+    seed_hash: int,
+    do_file_dir: str,
+) -> str:
+    """Wrap do-file contents with a *named* MCP capture log.
+
+    Same isolation guarantees as ``build_execute_code_wrapper`` plus the
+    deterministic seed and cd-to-do-file-dir behavior that file execution
+    requires.
+    """
+    return (
+        f"capture log close {capture_log_name}\n"
+        f"set seed {seed_hash}\n"
+        f'cd "{do_file_dir}"\n'
+        f'log using "{log_file_stata}", replace text name({capture_log_name})\n'
+        f"{original_code}\n"
+        f"capture log close {capture_log_name}\n"
+    )
+
+
 from contextlib import redirect_stdout
 from dataclasses import dataclass, field
 
@@ -487,14 +538,18 @@ def worker_process(
             tempfile.gettempdir(), f"stata_run_{worker_id}_{int(time.time() * 1000)}.log"
         )
         temp_log_stata = temp_log_file.replace("\\", "/")
+        capture_log_name = get_capture_log_name(worker_id)
 
         try:
-            # Wrap code with log commands for reliable output capture
-            wrapped_code = f"""capture log close _all
-log using "{temp_log_stata}", replace text
-{seed_prefix}{code}
-capture log close _all
-"""
+            # Wrap code with log commands for reliable output capture.
+            # Uses a *named* log so user-managed `log using` commands are not
+            # blocked by the unnamed log slot (issue #8).
+            wrapped_code = build_execute_code_wrapper(
+                code=code,
+                temp_log_stata=temp_log_stata,
+                capture_log_name=capture_log_name,
+                seed_prefix=seed_prefix,
+            )
             logging.debug(
                 f"execute_stata_code: Running wrapped code with log file: {temp_log_file}"
             )
@@ -594,6 +649,7 @@ capture log close _all
             log_dir = os.path.dirname(os.path.abspath(file_path))
             # Include worker_id in log filename to prevent conflicts between parallel sessions
             log_file = os.path.join(log_dir, f"{base_name}_{worker_id}_mcp.log")
+        capture_log_name = get_capture_log_name(worker_id)
 
         worker_state = WorkerState.BUSY
         # IMPORTANT: Clear stop_event FIRST to prevent race condition with monitor thread
@@ -634,13 +690,13 @@ capture log close _all
             # CRITICAL: Embed seed directly in wrapped code to ensure it's set reliably
             # This avoids race conditions from separate stata.run() calls that might fail silently
             # NOTE: cd to .do file's directory so outputs go there (log file location is separate)
-            wrapped_code = f"""capture log close _all
-                                set seed {seed_hash}
-                                cd "{do_file_dir}"
-                                log using "{log_file_stata}", replace text
-                                {original_code}
-                                capture log close _all
-                                """
+            wrapped_code = build_execute_file_wrapper(
+                original_code=original_code,
+                log_file_stata=log_file_stata,
+                capture_log_name=capture_log_name,
+                seed_hash=seed_hash,
+                do_file_dir=do_file_dir,
+            )
 
             # Execute with output capture
             with OutputCapture() as capture:
