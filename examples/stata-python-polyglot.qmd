@@ -1,0 +1,166 @@
+---
+title: "Polyglot Analysis: Stata + Python"
+author: "Your Name"
+date: today
+format: html
+engine: knitr
+---
+
+## Overview
+
+This document demonstrates a **Stata + Python polyglot** Quarto workflow. Stata
+handles data loading and statistical modelling; Python handles visualisation via
+`matplotlib` / `seaborn`. Data is shared through a CSV file written by Stata and
+read by Python. Python chunks are executed by knitr via the `reticulate` R package,
+which means R must be installed even though no R analysis is performed here.
+
+> **Prerequisites**
+> - R ≥ 4.0 with packages: `knitr`, `reticulate`
+>   (`install.packages(c("knitr", "reticulate"))`)
+> - Python ≥ 3.9 with packages: `pandas`, `matplotlib`, `seaborn`
+>   (`pip install pandas matplotlib seaborn`)
+> - Stata 17 or later
+> - Update `engine.path` and `python` path below to match your installation
+
+---
+
+## Setup
+
+```{r setup, include=FALSE}
+library(reticulate)
+
+# Point reticulate at the Python you want to use.
+# Remove or adjust if you rely on RETICULATE_PYTHON env var or a project-level
+# .python-version / renv Python configuration.
+# use_python("/path/to/your/python", required = TRUE)
+
+knitr::opts_chunk$set(
+  echo    = TRUE,
+  comment = "",
+  engine.path = list(
+    stata = "/path/to/stata"
+    # Linux / macOS : "/usr/local/stata18/stata-mp"
+    # Windows       : "C:/Program Files/Stata18/StataMP-64.exe"
+  )
+)
+```
+
+---
+
+## Step 1: Load data (Stata)
+
+```{stata load}
+sysuse auto, clear
+describe
+summarize price mpg weight foreign
+```
+
+## Step 2: Statistical model (Stata)
+
+```{stata regression}
+regress price mpg weight i.foreign
+```
+
+## Step 3: Export to CSV (Stata)
+
+Python will read this file in the next section.
+
+```{stata export}
+export delimited auto_temp.csv, replace
+```
+
+## Step 4: Read and inspect in Python
+
+```{python read}
+import pandas as pd
+
+df = pd.read_csv("auto_temp.csv")
+df["origin"] = df["foreign"].map({0: "Domestic", 1: "Foreign"})
+
+print(df.shape)
+print(df[["price", "mpg", "weight", "origin"]].describe())
+```
+
+## Step 5: Visualise in Python
+
+```{python scatter, fig.cap="Price versus mileage, coloured by car origin"}
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+fig, ax = plt.subplots(figsize=(7, 4))
+sns.scatterplot(
+    data    = df,
+    x       = "mpg",
+    y       = "price",
+    hue     = "origin",
+    palette = {"Domestic": "#1f77b4", "Foreign": "#d62728"},
+    s       = 60,
+    alpha   = 0.8,
+    ax      = ax,
+)
+sns.regplot(
+    data      = df[df["origin"] == "Domestic"],
+    x         = "mpg",
+    y         = "price",
+    scatter   = False,
+    color     = "#1f77b4",
+    line_kws  = {"linewidth": 1},
+    ax        = ax,
+)
+sns.regplot(
+    data      = df[df["origin"] == "Foreign"],
+    x         = "mpg",
+    y         = "price",
+    scatter   = False,
+    color     = "#d62728",
+    line_kws  = {"linewidth": 1},
+    ax        = ax,
+)
+ax.set_title("Price vs. Mileage by Car Origin")
+ax.set_xlabel("Mileage (mpg)")
+ax.set_ylabel("Price (USD)")
+plt.tight_layout()
+plt.show()
+```
+
+## Step 6: Summary statistics in Python
+
+```{python summary}
+summary = (
+    df.groupby("origin")[["price", "mpg", "weight"]]
+    .agg(["mean", "std"])
+    .round(1)
+)
+print(summary.to_string())
+```
+
+---
+
+## Cleanup
+
+```{python cleanup, include=FALSE}
+import os
+os.remove("auto_temp.csv")
+```
+
+---
+
+## Alternative: Jupyter + nbstata (no R required)
+
+If you want Python + Stata without R, consider a two-document approach:
+
+1. A **Stata-only** `.qmd` using `jupyter: nbstata` that produces intermediate
+   output files.
+2. A **Python-only** `.qmd` using `jupyter: python3` that reads those files.
+
+Quarto's [include shortcode](https://quarto.org/docs/authoring/includes.html)
+can then stitch them into a single rendered report.
+
+---
+
+## Positron IDE Note
+
+When opening this file in Positron with the `positron-stata` extension active,
+Stata cells execute in the running Stata session and Python cells execute in the
+running Python session. No `engine.path` or `reticulate` configuration is needed
+for the interactive preview path.
