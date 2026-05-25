@@ -1,0 +1,114 @@
+---
+title: "Polyglot Analysis: Stata + R"
+author: "Your Name"
+date: today
+format: html
+engine: knitr
+---
+
+## Overview
+
+This document demonstrates a **Stata + R polyglot** Quarto workflow. Stata handles
+data loading and statistical modelling; R handles visualisation via ggplot2. Data
+is passed between the two languages through a shared DTA file.
+
+> **Prerequisites**
+> - R ≥ 4.0 with packages: `knitr`, `haven`, `ggplot2`
+>   (`install.packages(c("knitr", "haven", "ggplot2"))`)
+> - Stata 17 or later
+> - Update `engine.path` below to match your Stata installation
+
+---
+
+## Setup
+
+```{r setup, include=FALSE}
+library(haven)
+library(ggplot2)
+
+knitr::opts_chunk$set(
+  echo    = TRUE,
+  comment = "",
+  engine.path = list(
+    stata = "/path/to/stata"
+    # Linux / macOS : "/usr/local/stata18/stata-mp"
+    # Windows       : "C:/Program Files/Stata18/StataMP-64.exe"
+  )
+)
+```
+
+---
+
+## Step 1: Load and clean data (Stata)
+
+```{stata load}
+sysuse auto, clear
+label variable price  "Price (USD)"
+label variable mpg    "Mileage (mpg)"
+label variable weight "Weight (lbs)"
+label variable foreign "Origin (0=Domestic, 1=Foreign)"
+describe
+```
+
+## Step 2: Regression model (Stata)
+
+```{stata regression}
+regress price mpg weight i.foreign
+estimates store ols
+```
+
+## Step 3: Export for R (Stata)
+
+```{stata export}
+save auto_for_r.dta, replace
+```
+
+## Step 4: Visualise in R
+
+R reads the DTA file written by Stata and produces a ggplot2 chart.
+
+```{r visualise, fig.cap="Price versus mileage, coloured by car origin"}
+df <- read_dta("auto_for_r.dta")
+
+# Decode the `foreign` value label into a readable factor
+df$origin <- factor(df$foreign,
+                    levels = c(0, 1),
+                    labels = c("Domestic", "Foreign"))
+
+ggplot(df, aes(x = mpg, y = price, colour = origin)) +
+  geom_point(size = 2.5, alpha = 0.8) +
+  geom_smooth(method = "lm", se = TRUE, linewidth = 0.8) +
+  scale_colour_manual(values = c("Domestic" = "#1f77b4",
+                                  "Foreign"  = "#d62728")) +
+  labs(
+    title  = "Price vs. Mileage by Car Origin",
+    x      = "Mileage (mpg)",
+    y      = "Price (USD)",
+    colour = "Origin"
+  ) +
+  theme_minimal()
+```
+
+## Step 5: Summary table in R
+
+```{r summary-table}
+agg <- aggregate(cbind(price, mpg, weight) ~ origin, data = df, FUN = mean)
+knitr::kable(agg, digits = 1, caption = "Mean values by car origin")
+```
+
+---
+
+## Cleanup
+
+```{r cleanup, include=FALSE}
+file.remove("auto_for_r.dta")
+```
+
+---
+
+## Positron IDE Note
+
+When opening this file in Positron with the `positron-stata` extension active,
+Stata cells execute in the running Stata session and R cells execute in the
+running R session. No `engine.path` configuration is needed for the interactive
+preview path.

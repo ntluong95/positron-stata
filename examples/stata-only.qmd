@@ -1,0 +1,87 @@
+---
+title: "Stata-Only Analysis"
+author: "Your Name"
+date: today
+format: html
+engine: knitr
+---
+
+## Overview
+
+This document demonstrates a **Stata-only** Quarto workflow using the knitr
+execution engine. All code cells run in Stata; no R or Python chunks are used.
+
+> **Prerequisites**
+> - R ≥ 4.0 with the `knitr` package installed (`install.packages("knitr")`)
+> - Stata 17 or later
+> - Update `engine.path` below to match your Stata installation
+
+---
+
+## Setup
+
+Configure knitr to locate your Stata executable. This chunk runs once and
+applies settings to all subsequent chunks.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo    = TRUE,
+  comment = "",
+  engine.path = list(
+    stata = "/path/to/stata"
+    # Linux / macOS : "/usr/local/stata18/stata-mp"
+    #               : "/usr/local/stata18/stata-se"
+    # Windows       : "C:/Program Files/Stata18/StataMP-64.exe"
+    # If `stata` is already on PATH, you can remove engine.path entirely.
+  )
+)
+```
+
+---
+
+## Load Data
+
+```{stata load-data}
+sysuse auto, clear
+describe
+```
+
+## Summary Statistics
+
+```{stata summary}
+summarize price mpg weight length foreign
+```
+
+## Tabulation
+
+```{stata tab}
+tabulate foreign, missing
+```
+
+## Regression
+
+```{stata regression}
+regress price mpg weight i.foreign
+```
+
+## Scatter Plot
+
+Graphs exported by Stata are embedded automatically when using Quarto + knitr.
+
+```{stata scatter, fig.cap="Relationship between fuel efficiency and price"}
+scatter price mpg, ///
+    title("Price vs. Mileage") ///
+    xtitle("Mileage (mpg)")    ///
+    ytitle("Price ($)")        ///
+    name(scatter_price_mpg, replace)
+
+graph export scatter_price_mpg.png, replace
+```
+
+---
+
+## Positron IDE Note
+
+When opening this file in Positron with the `positron-stata` extension active,
+you can execute cells interactively using the running Stata session — no knitr
+configuration is needed for the interactive preview path.
