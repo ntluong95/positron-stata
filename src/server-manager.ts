@@ -5,7 +5,7 @@ import * as vscode from "vscode";
 
 import { getStataConfiguration } from "./configuration";
 import { getPreferredStataInstallation } from "./provider";
-import { StataServerClient } from "./server-client";
+import { HealthStatus, StataServerClient } from "./server-client";
 import { StataInstallation } from "./stata-installation";
 
 const HEALTH_POLL_INTERVAL_MS = 500;
@@ -61,6 +61,7 @@ export class StataServerManager implements vscode.Disposable {
   private _serverProcess?: childProcess.ChildProcessWithoutNullStreams;
   private _startupPromise?: Promise<StataServerClient>;
   private _setupPromise?: Promise<void>;
+  private _multiSessionWarningShown = false;
 
   constructor(
     private readonly _context: vscode.ExtensionContext,
@@ -230,6 +231,7 @@ export class StataServerManager implements vscode.Disposable {
     try {
       const health = await client.health();
       if (health.status === "ok" && health.stata_available) {
+        this.warnIfMultiSessionUnavailable(health);
         return client;
       }
     } catch {
@@ -244,6 +246,7 @@ export class StataServerManager implements vscode.Disposable {
       try {
         const health = await client.health();
         if (health.status === "ok" && health.stata_available) {
+          this.warnIfMultiSessionUnavailable(health);
           return;
         }
       } catch {
@@ -254,6 +257,28 @@ export class StataServerManager implements vscode.Disposable {
 
     throw new Error(
       `Stata MCP server did not become healthy within ${HEALTH_TIMEOUT_MS}ms`,
+    );
+  }
+
+  private warnIfMultiSessionUnavailable(health: HealthStatus): void {
+    if (this._multiSessionWarningShown) {
+      return;
+    }
+    if (!getStataConfiguration().multiSession || health.multi_session !== false) {
+      return;
+    }
+
+    this._multiSessionWarningShown = true;
+    this._logger.warn(
+      "Multi-session mode was requested but the Stata server is running in " +
+        "single-session mode. The session manager (or its default worker) " +
+        "failed to start; see the server output above and the " +
+        "stata_worker_default.log file in the system temp directory.",
+    );
+    void vscode.window.showWarningMessage(
+      "Stata: multi-session mode failed to start, so the server is running " +
+        "in single-session mode. Parallel sessions are unavailable. " +
+        "Check the Stata server logs for details.",
     );
   }
 
