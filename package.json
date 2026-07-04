@@ -33,6 +33,7 @@
   "activationEvents": [
     "onLanguageRuntime:stata",
     "onLanguage:stata",
+    "onLanguage:quarto",
     "onCommand:positronStata.createNewFile",
     "onCommand:positronStata.runSelection",
     "onCommand:positronStata.runSelectionAndAdvance",
