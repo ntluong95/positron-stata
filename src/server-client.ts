@@ -6,6 +6,12 @@ export interface HealthStatus {
 	service: string;
 	version: string;
 	stata_available: boolean;
+	/**
+	 * Effective session mode reported by the server. False while multi-session
+	 * was requested means the server fell back to single-session mode.
+	 * Absent on older servers that predate this field.
+	 */
+	multi_session?: boolean;
 }
 
 export interface DataViewResponse {

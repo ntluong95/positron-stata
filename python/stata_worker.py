@@ -323,6 +323,9 @@ def worker_process(
         logging.Formatter(f"%(asctime)s - worker-{worker_id} - %(levelname)s - %(message)s")
     )
     worker_logger.addHandler(file_handler)
+    # Root logger shares the same handler below; don't propagate or every
+    # record would be written twice
+    worker_logger.propagate = False
     worker_logger.info(f"Worker {worker_id} started, logging to {worker_log_file}")
 
     # Also set the root logger to use this for convenience in other functions
@@ -372,12 +375,18 @@ def worker_process(
         nonlocal stata, stlib, worker_state, worker_temp_dir
 
         worker_state = WorkerState.INITIALIZING
+        # Log each step so a hang or hard crash (e.g., segfault during
+        # config.init) leaves a trace of the last step that completed.
+        worker_logger.info(
+            f"Initializing Stata: path={stata_path}, edition={stata_edition}"
+        )
 
         try:
             # === CRITICAL FOR PARALLELISM ===
             # Create a unique temp directory for this worker to isolate Stata's temp files
             # This prevents file locking conflicts between parallel workers
             worker_temp_dir = tempfile.mkdtemp(prefix=f"stata_worker_{worker_id}_")
+            worker_logger.info(f"Created worker temp dir: {worker_temp_dir}")
 
             # Set environment variables for isolation BEFORE importing pystata
             os.environ["SYSDIR_STATA"] = stata_path
@@ -392,6 +401,10 @@ def worker_process(
 
             if os.path.exists(utilities_path):
                 sys.path.insert(0, utilities_path)
+            else:
+                worker_logger.warning(
+                    f"PyStata utilities path not found: {utilities_path}"
+                )
             if os.path.exists(utilities_parent):
                 sys.path.insert(0, utilities_parent)
 
@@ -400,9 +413,12 @@ def worker_process(
                 os.environ["_JAVA_OPTIONS"] = "-Djava.awt.headless=true"
 
             # Initialize PyStata configuration
+            worker_logger.info("Importing pystata...")
             from pystata import config
 
+            worker_logger.info(f"Calling pystata config.init('{stata_edition}')...")
             config.init(stata_edition)
+            worker_logger.info("pystata config.init() completed")
 
             # Import stata module after initialization
             from pystata import stata as stata_module
@@ -413,6 +429,7 @@ def worker_process(
             from pystata.config import stlib as stlib_module
 
             stlib = stlib_module
+            worker_logger.info("PyStata modules loaded")
 
             # On Windows, redirect PyStata's output to devnull as well
             # to prevent duplicate output (we capture output via log files, not stdout)
@@ -434,11 +451,13 @@ def worker_process(
                 pass  # Non-critical if seed setting fails
 
             worker_state = WorkerState.READY
+            worker_logger.info("Stata initialization complete, worker READY")
             return True
 
         except Exception as e:
             worker_state = WorkerState.INIT_FAILED
             error_msg = f"Failed to initialize Stata: {str(e)}\n{traceback.format_exc()}"
+            worker_logger.error(error_msg)
             return False, error_msg
 
     # Flag to prevent multiple SetBreak calls - declared here for visibility

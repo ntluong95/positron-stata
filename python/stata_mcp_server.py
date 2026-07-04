@@ -1407,6 +1407,7 @@ def run_stata_file(
     timeout: int = 600,
     auto_name_graphs: bool = False,
     working_dir: Optional[str] = None,
+    log_file: Optional[str] = None,
 ) -> str:
     """Run a Stata .do file with improved handling for long-running processes.
 
@@ -1416,7 +1417,9 @@ def run_stata_file(
         auto_name_graphs: Whether to automatically add names to graphs (default: False for MCP/LLM calls)
         working_dir: Working directory to cd to before running (None = defaults to .do file's directory).
                      This affects where outputs like graph export, save, etc. are written.
-                     Log files are saved to the location configured in logFileLocation setting (separate from working dir).
+        log_file: Explicit log file path to use. Streaming callers pass the path they
+                  monitor so Stata writes where the stream reads. When None, the path
+                  is derived from the .do file name and the logFileLocation setting.
     """
     # Set timeout from parameter instead of hardcoding
     MAX_TIMEOUT = timeout
@@ -1465,10 +1468,10 @@ def run_stata_file(
         do_file_name = os.path.basename(file_path)
         do_file_base = os.path.splitext(do_file_name)[0]
 
-        # Create a custom log file path based on user settings
-        # The log file path will be absolute, allowing it to be saved anywhere
-        # regardless of Stata's current working directory
-        custom_log_file = get_log_file_path(file_path, do_file_base)
+        # Create a custom log file path based on user settings, unless the caller
+        # provided one (streaming callers monitor a specific path and Stata must
+        # log to that exact file or the stream stays empty)
+        custom_log_file = log_file if log_file else get_log_file_path(file_path, do_file_base)
         logging.info(f"Will save log to: {custom_log_file}")
 
         # Read the do file content
@@ -2387,7 +2390,11 @@ async def stata_run_file_stream(
                 logging.info("[STREAM] Using single-session mode")
                 # Note: run_stata_file handles graph reset and detection internally
                 result = run_stata_file(
-                    processed_file, timeout=timeout, working_dir=working_dir, auto_name_graphs=True
+                    processed_file,
+                    timeout=timeout,
+                    working_dir=working_dir,
+                    auto_name_graphs=True,
+                    log_file=log_file,  # Log to the same file the stream monitors
                 )
                 # Detect graphs after execution for single-session streaming mode
                 # This is needed because streaming reads log file directly, not the returned result string
@@ -2415,6 +2422,7 @@ async def stata_run_file_stream(
     start_time = time.time()
     last_read_pos = 0  # Track byte position in file for incremental reading
     check_interval = 0.5  # Check every 500ms for responsive streaming
+    streamed_any = False  # Whether any log content reached the client
 
     # Monitor progress by reading log file incrementally using byte offset
     # Wrap in try-except to handle client disconnection gracefully
@@ -2442,6 +2450,7 @@ async def stata_run_file_stream(
                             for line in new_content.splitlines():
                                 if line.strip():
                                     escaped = line.replace("\\", "\\\\")
+                                    streamed_any = True
                                     yield f"data: {escaped}\n\n"
                 except Exception as e:
                     logging.debug(f"Error reading log file: {e}")
@@ -2469,9 +2478,23 @@ async def stata_run_file_stream(
                             for line in remaining.splitlines():
                                 if line.strip():
                                     escaped = line.replace("\\", "\\\\")
+                                    streamed_any = True
                                     yield f"data: {escaped}\n\n"
                 except Exception as e:
                     logging.debug(f"Error reading final log content: {e}")
+
+            # Fallback: if the log file never produced output (e.g., it could not
+            # be created or Stata logged elsewhere), send the final result instead
+            # so the execution output is not silently lost.
+            if not streamed_any and status == "success" and result and result.strip():
+                logging.warning(
+                    "[STREAM] No output was streamed from the log file; "
+                    "sending final execution result as fallback"
+                )
+                for line in result.splitlines():
+                    if line.strip():
+                        escaped = line.replace("\\", "\\\\")
+                        yield f"data: {escaped}\n\n"
 
             if status == "error":
                 yield f"data: ERROR: {result}\n\n"
@@ -2731,7 +2754,11 @@ async def stata_run_selection_stream(
             else:
                 logging.info("[STREAM-SEL] Using single-session mode")
                 result = run_stata_file(
-                    processed_file, timeout=timeout, working_dir=working_dir, auto_name_graphs=True
+                    processed_file,
+                    timeout=timeout,
+                    working_dir=working_dir,
+                    auto_name_graphs=True,
+                    log_file=log_file,  # Log to the same file the stream monitors
                 )
                 try:
                     logging.debug("[STREAM-SEL] Detecting graphs for single-session mode...")
@@ -2798,6 +2825,7 @@ async def stata_run_selection_stream(
     start_time = time.time()
     last_read_pos = 0
     check_interval = 0.5
+    streamed_any = False  # Whether any log content reached the client
 
     # Monitor progress by reading log file incrementally
     # Same structure as run_file_stream - wrap in try-except for client disconnect
@@ -2824,6 +2852,7 @@ async def stata_run_selection_stream(
                                 output_line, _ = process_line(line)
                                 if output_line:
                                     escaped = output_line.replace("\\", "\\\\")
+                                    streamed_any = True
                                     yield f"data: {escaped}\n\n"
                 except Exception as e:
                     logging.debug(f"Error reading log file: {e}")
@@ -2851,9 +2880,32 @@ async def stata_run_selection_stream(
                                 output_line, _ = process_line(line)
                                 if output_line:
                                     escaped = output_line.replace("\\", "\\\\")
+                                    streamed_any = True
                                     yield f"data: {escaped}\n\n"
                 except Exception as e:
                     logging.debug(f"Error reading final log content: {e}")
+
+            # Fallback: if the log file never produced output (e.g., it could not
+            # be created or Stata logged elsewhere), send the final result instead
+            # so the execution output is not silently lost.
+            if not streamed_any and status == "success" and result and result.strip():
+                logging.warning(
+                    "[STREAM-SEL] No output was streamed from the log file; "
+                    "sending final execution result as fallback"
+                )
+                # Prefer just the user output between the start/end markers
+                in_user_output = False
+                fallback_lines = []
+                for line in result.splitlines():
+                    output_line, _ = process_line(line)
+                    if output_line:
+                        fallback_lines.append(output_line)
+                # No markers in the result: send it raw so diagnostics are visible
+                if not fallback_lines:
+                    fallback_lines = [line for line in result.splitlines() if line.strip()]
+                for line in fallback_lines:
+                    escaped = line.replace("\\", "\\\\")
+                    yield f"data: {escaped}\n\n"
 
             if status == "error":
                 yield f"data: ERROR: {result}\n\n"
@@ -3188,6 +3240,10 @@ async def health_check():
         "service": SERVER_NAME,
         "version": SERVER_VERSION,
         "stata_available": stata_available,
+        # Reports the EFFECTIVE mode: False here while --multi-session was passed
+        # means the session manager failed to start and the server fell back to
+        # single-session mode. The extension surfaces this as a warning.
+        "multi_session": multi_session_enabled,
     }
 
 
@@ -5483,18 +5539,28 @@ def main():
                     stata_available = True
                     has_stata = True
                 else:
-                    logging.error("Failed to start session manager")
+                    logging.error(
+                        "MULTI-SESSION MODE DISABLED: the session manager failed to start "
+                        "(the default worker process did not initialize). "
+                        f"Check {os.path.join(tempfile.gettempdir(), 'stata_worker_default.log')} "
+                        "for the worker's initialization trace. "
+                        "Falling back to single-session mode."
+                    )
                     multi_session_enabled = False
                     # Fall back to single-session mode
                     try_init_stata(STATA_PATH)
             except ImportError as e:
-                logging.error(f"Failed to import session_manager: {e}")
-                logging.info("Falling back to single-session mode")
+                logging.error(
+                    f"MULTI-SESSION MODE DISABLED: failed to import session_manager: {e}. "
+                    "Falling back to single-session mode."
+                )
                 multi_session_enabled = False
                 try_init_stata(STATA_PATH)
             except Exception as e:
-                logging.error(f"Error initializing session manager: {e}")
-                logging.info("Falling back to single-session mode")
+                logging.error(
+                    f"MULTI-SESSION MODE DISABLED: error initializing session manager: {e}. "
+                    "Falling back to single-session mode."
+                )
                 multi_session_enabled = False
                 try_init_stata(STATA_PATH)
 
